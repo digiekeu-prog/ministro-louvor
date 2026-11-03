@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   CircleAlert,
+  ClipboardPaste,
   FileText,
   GripVertical,
   Guitar,
@@ -28,6 +29,7 @@ import {
   VOCAL_FUNCTIONS,
 } from '../lib/types'
 import { SOURCE_STYLE, describeMedia } from '../lib/mediaLinks'
+import { splitChordSheet } from '../lib/chordSheet'
 import { cn, toISODate, uid } from '../lib/utils'
 
 const CATEGORY_ACCENT: Record<Category, { chip: string; text: string; ring: string }> = {
@@ -66,6 +68,7 @@ export function CultoEditorPage() {
   const [selectedSongs, setSelectedSongs] = useState<ServiceSong[]>(editing?.songs ?? [])
   const [saved, setSaved] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
+  const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
     if (!editing) return
@@ -124,6 +127,47 @@ export function CultoEditorPage() {
   function updateSong(index: number, patch: Partial<ServiceSong>) {
     setSelectedSongs((prev) => prev.map((song, i) => (i === index ? { ...song, ...patch } : song)))
     setSaved(false)
+  }
+
+  /** Mostra um aviso temporário na tela. */
+  function showNotice(message: string) {
+    setNotice(message)
+    window.setTimeout(() => setNotice(null), 5000)
+  }
+
+  /**
+   * Cola um texto que veio de um site de cifra: se tiver linhas de acordes,
+   * separa automaticamente a letra da cifra (guardando o alinhamento).
+   */
+  function applyPastedText(index: number, raw: string, target: 'lyrics' | 'chords') {
+    const result = splitChordSheet(raw)
+    if (!result.detected) {
+      updateSong(index, { [target]: raw } as Partial<ServiceSong>)
+      showNotice(target === 'lyrics' ? 'Letra colada.' : 'Cifra colada.')
+      return
+    }
+    updateSong(index, { lyrics: result.lyrics, chords: result.chords })
+    showNotice('Cifra detectada — letra e cifras separadas automaticamente.')
+  }
+
+  /** Cola direto da área de transferência (um clique, sem Ctrl+V). */
+  async function pasteFromClipboard(index: number, target: 'lyrics' | 'chords') {
+    try {
+      // timeout: se o navegador travar esperando permissão, o usuário é avisado
+      const text = await Promise.race([
+        navigator.clipboard.readText(),
+        new Promise<never>((_, reject) =>
+          window.setTimeout(() => reject(new Error('timeout')), 3000),
+        ),
+      ])
+      if (!text.trim()) {
+        showNotice('A área de transferência está vazia.')
+        return
+      }
+      applyPastedText(index, text, target)
+    } catch {
+      showNotice('Não foi possível ler a área de transferência. Use Ctrl+V dentro do campo.')
+    }
   }
 
   function removeSong(index: number) {
@@ -242,6 +286,13 @@ export function CultoEditorPage() {
               <li key={error}>• {error}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {notice && (
+        <div className="mb-5 flex items-center gap-2.5 rounded-2xl border border-neon-cyan/25 bg-neon-cyan/10 px-4 py-3 text-sm text-neon-cyan">
+          <Check size={16} className="shrink-0" />
+          {notice}
         </div>
       )}
 
@@ -660,9 +711,25 @@ export function CultoEditorPage() {
                             <span className="ml-auto text-[0.62rem] text-zinc-600">vazia</span>
                           )}
                         </summary>
+                        <div className="flex items-center gap-2 px-3 pb-1">
+                          <button
+                            type="button"
+                            onClick={() => pasteFromClipboard(index, 'lyrics')}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[0.68rem] font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                          >
+                            <ClipboardPaste size={12} /> Colar da área de transferência
+                          </button>
+                        </div>
                         <Textarea
                           value={song.lyrics ?? ''}
                           onChange={(e) => updateSong(index, { lyrics: e.target.value })}
+                          onPaste={(e) => {
+                            const text = e.clipboardData.getData('text')
+                            const result = splitChordSheet(text)
+                            if (!result.detected) return
+                            e.preventDefault()
+                            applyPastedText(index, text, 'lyrics')
+                          }}
                           placeholder="Cole aqui a letra da música…"
                           className="m-2 min-h-40 border-0 bg-transparent p-2 text-sm leading-relaxed"
                         />
@@ -681,10 +748,28 @@ export function CultoEditorPage() {
                             <span className="ml-auto text-[0.62rem] text-zinc-600">vazia</span>
                           )}
                         </summary>
+                        <div className="flex items-center gap-2 px-3 pb-1">
+                          <button
+                            type="button"
+                            onClick={() => pasteFromClipboard(index, 'chords')}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[0.68rem] font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                          >
+                            <ClipboardPaste size={12} /> Colar da área de transferência
+                          </button>
+                        </div>
                         <Textarea
                           value={song.chords ?? ''}
                           onChange={(e) => updateSong(index, { chords: e.target.value })}
-                          placeholder={'Cole a cifra:\n\nG        C\nAmazing grace! how sweet the sound'}
+                          onPaste={(e) => {
+                            const text = e.clipboardData.getData('text')
+                            const result = splitChordSheet(text)
+                            if (!result.detected) return
+                            e.preventDefault()
+                            applyPastedText(index, text, 'chords')
+                          }}
+                          placeholder={
+                            'Cole a cifra com a letra embaixo:\n\nG        C\nAmazing grace! how sweet the sound\n\nou só os acordes'
+                          }
                           className="m-2 min-h-40 border-0 bg-transparent p-2 font-mono text-xs leading-relaxed"
                         />
                       </details>

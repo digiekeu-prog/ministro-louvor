@@ -18,11 +18,13 @@ import {
 } from 'lucide-react'
 import type { ServiceSong } from '../lib/types'
 import { SOURCE_STYLE, describeMedia } from '../lib/mediaLinks'
-import { Badge, Button, IconButton, Segmented } from './ui'
+import { stripChordLines } from '../lib/chordSheet'
+import { Badge, Button, IconButton } from './ui'
 import { Portal } from './Portal'
 import { cn } from '../lib/utils'
 import { useDraggable } from '../hooks/useDraggable'
 
+/** 'letra' = só as palavras; 'cifra' = letra com os acordes em cima. */
 type TextTab = 'letra' | 'cifra'
 
 /** Velocidade base do "rolar" da letra (pixels por segundo em 1x). */
@@ -113,11 +115,26 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
     return media.embedUrl
   }, [media])
 
+  /** Letra limpa: a cadastrada ou, se não houver, extraída da própria cifra. */
+  const onlyLyrics = useMemo(() => {
+    if (song?.lyrics?.trim()) return song.lyrics
+    if (song?.chords?.trim()) return stripChordLines(song.chords)
+    return ''
+  }, [song])
+
+  /** Texto com os acordes alinhados acima da letra. */
+  const sheet = useMemo(() => {
+    if (song?.chords?.trim()) return song.chords
+    if (song?.lyrics?.trim()) return song.lyrics
+    return ''
+  }, [song])
+
   if (!open || !song) return null
 
   const hasLyrics = Boolean(song.lyrics?.trim())
   const hasChords = Boolean(song.chords?.trim())
   const style = media ? SOURCE_STYLE[media.source] : null
+  const hasSheet = Boolean(sheet.trim())
 
   async function copyText() {
     const content = [song?.lyrics, song?.chords].filter(Boolean).join('\n\n———\n\n')
@@ -265,16 +282,30 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
 
             {/* Letra / cifra embaixo */}
             <div className="flex min-h-0 flex-1 flex-col">
-              {(hasLyrics || hasChords) && (
-                <div className="shrink-0 px-4 pt-3 sm:px-5">
-                  <Segmented
-                    value={tab}
-                    onChange={setTab}
-                    options={[
-                      { value: 'letra', label: 'Letra', icon: <FileText size={14} /> },
-                      { value: 'cifra', label: 'Cifra', icon: <Guitar size={14} /> },
-                    ]}
-                  />
+              {/* Um único botão alterna: só a letra  <->  letra com as cifras */}
+              {hasSheet && (
+                <div className="flex shrink-0 items-center gap-2 px-4 pt-3 sm:px-5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTab((current) => (current === 'letra' ? 'cifra' : 'letra'))
+                      scrollRef.current?.scrollTo({ top: 0 })
+                    }}
+                    className={cn(
+                      'inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition',
+                      tab === 'letra'
+                        ? 'bg-neon-gold/12 text-neon-gold ring-1 ring-neon-gold/25 hover:bg-neon-gold/20'
+                        : 'bg-neon-purple/12 text-neon-purple ring-1 ring-neon-purple/25 hover:bg-neon-purple/20',
+                    )}
+                  >
+                    {tab === 'letra' ? <Guitar size={15} /> : <FileText size={15} />}
+                    {tab === 'letra' ? 'Ver com as cifras' : 'Ver só a letra'}
+                  </button>
+                  <p className="min-w-0 truncate text-[0.7rem] text-zinc-500">
+                    {tab === 'letra'
+                      ? 'letra grande, sem cifragem'
+                      : 'cifra alinhada acima da letra'}
+                  </p>
                 </div>
               )}
 
@@ -340,10 +371,10 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
 
               <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
                 {tab === 'letra' ? (
-                  hasLyrics ? (
+                  onlyLyrics.trim() ? (
                     <div className="rounded-2xl border border-white/8 bg-ink-900/60 p-5 sm:p-6">
                       <p className="whitespace-pre-wrap font-display text-[1.05rem] leading-[1.9] text-zinc-200">
-                        {song.lyrics}
+                        {onlyLyrics}
                       </p>
                     </div>
                   ) : (
@@ -357,10 +388,10 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
                       </p>
                     </div>
                   )
-                ) : hasChords ? (
+                ) : hasSheet ? (
                   <div className="rounded-2xl border border-white/8 bg-ink-900/60 p-5 sm:p-6">
                     <pre className="overflow-x-auto whitespace-pre font-mono text-[0.82rem] leading-[1.7] text-zinc-200 sm:text-sm">
-                      {song.chords}
+                      {sheet}
                     </pre>
                   </div>
                 ) : (
