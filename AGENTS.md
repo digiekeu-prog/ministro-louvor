@@ -1,24 +1,36 @@
 # AGENTS.md
 
-App React + Vite (SPA, sem backend). Tudo é client-side: os dados moram em `localStorage`
-com o prefixo `worshipflow:` e o seed inicial é aplicado na primeira visita.
+App React + Vite (SPA) **com functions na Vercel** (`api/`) e Postgres (Neon) para os dados
+compartilhados. O `localStorage` (`worshipflow:*`) continua sendo o cache local (o app abre
+rápido e funciona sem internet), mas a **fonte da verdade é o servidor**.
 
 ## Comandos
 
 ```bash
 npm run dev        # dev server em http://localhost:5173 (para testar embed do YouTube use localhost, não o IP)
+npm run dev:api    # API local em http://localhost:8787 (o Vite faz proxy de /api para ela)
 npm run build      # roda `tsc -b` e depois `vite build` — build quebrado = erro de tipo
 npm run lint       # oxlint (config em .oxlintrc.json)
+npm run db:seed    # semeia o banco (uma vez); --reset recomeça do zero
 ```
 
 Sem testes automatizados: **verifique no navegador** (login → escalas → abrir um culto → abrir uma
-música no repertório). O `npm run build` sozinho não cobre comportamento de UI.
+música no repertório). Para checar a sincronização, abra **duas origens diferentes**
+(`localhost:5173` e `127.0.0.1:5173` têm `localStorage` separado) e altere algo em uma.
 
 ## Mapa do código
 
 - `src/App.tsx` — rotas. `RequireAdmin` só libera quem tem `isAdmin` (categoria `admin`).
-- `src/store/DataContext.tsx` — CRUD de serviços/membros/presenças + seed, persistido em `localStorage`.
-- `src/store/AuthContext.tsx` — sessão fake: **qualquer senha** funciona para um e-mail cadastrado.
+- `src/store/DataContext.tsx` — CRUD de serviços/membros/presenças. Cada alteração vira uma
+  **operação** (`upsert`/`delete`/`reset`) e vai para a fila de sincronização.
+- `src/store/AuthContext.tsx` — sessão: o **e-mail precisa existir na lista do servidor**; a
+  senha é livre (simulação de UI). Sem internet, cai para a lista local.
+- `src/lib/sync.ts` — motor de sincronização: fila, polling (4s), token e status na tela.
+- `src/lib/syncState.ts` — tipos e a lógica de merge das operações (usada pelo app e pelo servidor).
+- `api/_lib/app.ts` — as regras do servidor (login/pull/push e permissões).
+- `api/_lib/postgres.ts` — acesso ao Postgres (Neon) e criação das tabelas.
+- `api/_lib/auth.ts` — token de sessão assinado (HMAC), com o segredo guardado no banco.
+- `src/components/SyncStatus.tsx` — selo de estado da sincronização + aviso de primeira configuração.
 - `src/lib/mediaLinks.ts` — `describeMedia()` converte qualquer URL em fonte + URL de embed.
 - `src/lib/types.ts` — tipos e as listas `INSTRUMENT_FUNCTIONS` / `VOCAL_FUNCTIONS` que alimentam
   selects e filtros de skills.
@@ -27,6 +39,16 @@ música no repertório). O `npm run build` sozinho não cobre comportamento de U
 
 ## Regras que não dá para inferir do código
 
+- **O log no Postgres é a fonte da verdade** (tabela `wf_changes`, append-only). O estado é
+  reconstruído aplicando as operações em ordem — por isso dois aparelhos editando ao mesmo tempo
+  não se sobrescrevem. Não troque isso por "grava o estado inteiro": perde-se o conflito.
+- **Toda alteração da UI precisa virar operação.** Se um `setState` do `DataContext` não passa
+  por `commit(..., ops)`, ela não chega aos outros aparelhos.
+- **O servidor decide as permissões**: equipe e escalas só podem ser alteradas por `admin`
+  (`api/_lib/app.ts`); presença pode ser por qualquer integrante. A UI esconde o botão, mas quem
+  protege de verdade é a API.
+- **O `vercel.json` não pode reescrever `/api`** — a regra é `"/((?!api/).*)"`. Se o rewrite
+  voltar a ser `/(.*)`, as functionssomem e o app fica "só neste aparelho".
 - **Modais flutuantes precisam de `Portal`** (`src/components/Portal.tsx`). As páginas usam
   `animate-fade-up`, que aplica `transform` e cria um containing block: sem portal, o
   `position: fixed` do modal passa a se posicionar pelo conteúdo rolado e o modal abre
@@ -43,6 +65,8 @@ música no repertório). O `npm run build` sozinho não cobre comportamento de U
 - Tailwind v4: cores customizadas via `@theme` em `src/index.css` (`ink-*`, `neon-*`); não
   criar arquivo de config do Tailwind.
 - Idioma da UI e dos comentários: **português do Brasil**.
+- Ao mexer no `api/`, use imports **com a extensão `.ts`** (o Node executa os scripts assim) e
+  mantenha o `api/` livre de dependências do navegador.
 
 ## Antes de commitar
 

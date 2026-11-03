@@ -1,6 +1,18 @@
 import { createContext } from 'react'
 import type { Member, Presence, Service, Song } from '../lib/types'
 
+export interface SyncControls {
+  /**
+   * O servidor ainda tem somente os dados de exemplo: o ministro pode enviar
+   * os dados deste aparelho para toda a equipe.
+   */
+  offer: boolean
+  /** Envia os dados deste aparelho para toda a equipe. */
+  sendLocal: () => void
+  /** Troca os dados locais pelos que estão na nuvem. */
+  useRemote: () => void
+}
+
 export interface DataContextValue {
   members: Member[]
   services: Service[]
@@ -17,14 +29,18 @@ export interface DataContextValue {
   setPresence: (memberId: string, serviceId: string, confirmed: boolean) => void
   isConfirmed: (memberId: string, serviceId: string) => boolean
   resetDemoData: () => void
+  sync: SyncControls
 }
 
 export interface AuthContextValue {
   session: { id: string; email: string } | null
   user: Member | null
   isAdmin: boolean
-  login: (email: string, password: string) => { ok: boolean; error?: string }
-  loginAs: (memberId: string) => void
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<{ ok: boolean; error?: string; warning?: string }>
+  loginAs: (memberId: string) => Promise<void>
   logout: () => void
 }
 

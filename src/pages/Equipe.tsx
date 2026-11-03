@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Music2, Pencil, Plus, Search, Trash2, UserPlus, Users } from 'lucide-react'
+import { Music2, Pencil, Plus, Search, Trash2, Upload, UserPlus, Users } from 'lucide-react'
 import { PageTitle } from '../components/AppShell'
+import { SyncBadge } from '../components/SyncStatus'
 import { Avatar, Badge, Button, Card, EmptyState, Field, Input, Modal, Segmented, Select } from '../components/ui'
 import { useData } from '../store/DataContext'
 import type { Member, MemberCategory } from '../lib/types'
@@ -19,7 +20,7 @@ const EMPTY_FORM = {
 }
 
 export function EquipePage() {
-  const { members, addMember, updateMember, removeMember } = useData()
+  const { members, addMember, updateMember, removeMember, sync } = useData()
   const [filter, setFilter] = useState<Filter>('todos')
   const [query, setQuery] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -119,6 +120,22 @@ export function EquipePage() {
           </Button>
         }
       />
+
+      <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-white/8 bg-white/3 p-4 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <p className="font-display text-sm font-semibold text-white">Dados compartilhados</p>
+          <p className="mt-0.5 text-xs text-zinc-400">
+            Escala, equipe e presenças ficam salvos na nuvem: o que você muda aqui aparece nos
+            celulares e notebooks de toda a equipe.
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <SyncBadge />
+          <Button variant="secondary" size="sm" onClick={sync.sendLocal}>
+            <Upload size={14} /> Enviar os dados deste aparelho
+          </Button>
+        </div>
+      </div>
 
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
         <Segmented

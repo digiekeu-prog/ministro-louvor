@@ -15,6 +15,8 @@ export function LoginPage() {
   const [password, setPassword] = useState('123456')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [warning, setWarning] = useState('')
+  const [busy, setBusy] = useState(false)
 
   const demoAccounts = [
     { member: members.find((m) => m.category === 'admin'), label: 'Ministro (Admin)' },
@@ -22,13 +24,25 @@ export function LoginPage() {
     { member: members.find((m) => m.id === 'mem_renata'), label: 'Vocal' },
   ].filter((a) => a.member)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const result = login(email, password)
+    setBusy(true)
+    setError('')
+    const result = await login(email, password)
+    setBusy(false)
     if (!result.ok) {
       setError(result.error ?? 'Não foi possível entrar.')
       return
     }
+    if (result.warning) setWarning(result.warning)
+    navigate('/app', { replace: true })
+  }
+
+  async function handleQuickLogin(memberId: string) {
+    setBusy(true)
+    setError('')
+    await loginAs(memberId)
+    setBusy(false)
     navigate('/app', { replace: true })
   }
 
@@ -119,8 +133,14 @@ export function LoginPage() {
               </div>
             )}
 
-            <Button type="submit" size="lg" className="w-full">
-              Entrar
+            {warning && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-200">
+                {warning}
+              </div>
+            )}
+
+            <Button type="submit" size="lg" className="w-full" disabled={busy}>
+              {busy ? 'Entrando…' : 'Entrar'}
               <LogIn size={17} />
             </Button>
           </form>
@@ -139,9 +159,9 @@ export function LoginPage() {
                 key={account.member!.id}
                 type="button"
                 onClick={() => {
-                  loginAs(account.member!.id)
-                  navigate('/app', { replace: true })
+                  void handleQuickLogin(account.member!.id)
                 }}
+                disabled={busy}
                 className="flex w-full items-center gap-3 rounded-xl border border-white/8 bg-white/3 px-3.5 py-2.5 text-left transition hover:border-neon-cyan/30 hover:bg-neon-cyan/5"
               >
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/5 text-zinc-400">

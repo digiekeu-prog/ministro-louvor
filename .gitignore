@@ -29,3 +29,9 @@ dist-ssr
 
 # OpenCode
 .opencode/
+
+.vercel
+.env*
+
+# dados da API local de desenvolvimento
+.dev-data

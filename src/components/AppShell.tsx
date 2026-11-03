@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Logo } from './Logo'
 import { Avatar } from './ui'
+import { SyncBadge, SyncOfferBanner } from './SyncStatus'
 import { useAuth } from '../store/AuthContext'
 import { cn, firstName, initials } from '../lib/utils'
 
@@ -96,6 +97,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </p>
             </div>
           </div>
+          <SyncBadge className="mt-3 w-full justify-center" />
           <button
             type="button"
             onClick={handleLogout}
@@ -109,20 +111,24 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* -------------------------------- Main -------------------------------- */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-40 border-b border-white/8 bg-ink-900/75 backdrop-blur-xl lg:hidden">
-          <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center justify-between gap-2 px-4 py-3">
             <Logo size={36} withWordmark />
-            <button
-              type="button"
-              onClick={() => navigate('/app/perfil')}
-              className="flex items-center gap-2 rounded-full ring-1 ring-white/10 transition hover:ring-neon-cyan/40"
-            >
-              <Avatar name={user?.name ?? '?'} hue={user?.hue ?? 200} size={34} />
-            </button>
+            <div className="flex items-center gap-2">
+              <SyncBadge />
+              <button
+                type="button"
+                onClick={() => navigate('/app/perfil')}
+                className="flex items-center gap-2 rounded-full ring-1 ring-white/10 transition hover:ring-neon-cyan/40"
+              >
+                <Avatar name={user?.name ?? '?'} hue={user?.hue ?? 200} size={34} />
+              </button>
+            </div>
           </div>
         </header>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-9">
           <div key={location.pathname} className="animate-fade-up">
+            <SyncOfferBanner />
             {children}
           </div>
         </main>
