@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Check,
@@ -7,7 +7,12 @@ import {
   Guitar,
   Info,
   Maximize2,
+  Minus,
   Music4,
+  Pause,
+  Play,
+  Plus,
+  RotateCcw,
   Video,
   X,
 } from 'lucide-react'
@@ -19,6 +24,12 @@ import { cn } from '../lib/utils'
 import { useDraggable } from '../hooks/useDraggable'
 
 type TextTab = 'letra' | 'cifra'
+
+/** Velocidade base do "rolar" da letra (pixels por segundo em 1x). */
+const SCROLL_BASE = 26
+const MIN_SPEED = 0.5
+const MAX_SPEED = 3
+const SPEED_STEP = 0.5
 
 interface SongViewerProps {
   song: ServiceSong | null
@@ -34,7 +45,10 @@ interface SongViewerProps {
 export function SongViewer({ song, open, onClose }: SongViewerProps) {
   const [tab, setTab] = useState<TextTab>('letra')
   const [copied, setCopied] = useState(false)
+  const [playing, setPlaying] = useState(false)
+  const [speed, setSpeed] = useState(1)
   const [lastSongId, setLastSongId] = useState(song?.id)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const { panelRef, offset, dragging, handlePointerDown, reset } = useDraggable(open)
 
   // ao trocar de música, prioriza o que o músico mais precisa no palco
@@ -42,7 +56,32 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
     setLastSongId(song.id)
     setTab(song.lyrics?.trim() ? 'letra' : 'cifra')
     setCopied(false)
+    setPlaying(false)
   }
+
+  /** Rola a letra/cifra automaticamente, do topo ao fim. */
+  useEffect(() => {
+    if (!playing) return
+    let last = performance.now()
+
+    const tick = () => {
+      const now = performance.now()
+      const delta = (now - last) / 1000
+      last = now
+      const element = scrollRef.current
+      if (element) {
+        const max = element.scrollHeight - element.clientHeight
+        if (element.scrollTop >= max - 1) {
+          setPlaying(false)
+          return
+        }
+        element.scrollTop += SCROLL_BASE * speed * delta
+      }
+    }
+
+    const timer = window.setInterval(tick, 50)
+    return () => window.clearInterval(timer)
+  }, [playing, speed])
 
   useEffect(() => {
     if (!open || !song) return
@@ -239,7 +278,67 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
                 </div>
               )}
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+              {/* Rodar a letra automaticamente */}
+              {(hasLyrics || hasChords) && (
+                <div className="flex shrink-0 items-center gap-2 px-4 py-2.5 sm:px-5">
+                  <button
+                    type="button"
+                    onClick={() => setPlaying((value) => !value)}
+                    aria-label={playing ? 'Pausar' : 'Rodar a letra'}
+                    title={playing ? 'Pausar' : 'Rodar a letra automaticamente'}
+                    className={cn(
+                      'grid h-9 w-9 shrink-0 place-items-center rounded-xl transition',
+                      playing
+                        ? 'bg-neon-cyan text-ink-950 shadow-[0_0_18px_-4px_rgba(34,211,238,0.8)]'
+                        : 'bg-neon-cyan/12 text-neon-cyan ring-1 ring-neon-cyan/25 hover:bg-neon-cyan/20',
+                    )}
+                  >
+                    {playing ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+                  </button>
+
+                  <div className="flex items-center gap-0.5 rounded-xl bg-white/4 p-0.5 ring-1 ring-white/8">
+                    <button
+                      type="button"
+                      onClick={() => setSpeed((value) => Math.max(MIN_SPEED, +(value - SPEED_STEP).toFixed(1)))}
+                      disabled={speed <= MIN_SPEED}
+                      aria-label="Diminuir velocidade"
+                      className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/8 hover:text-white disabled:pointer-events-none disabled:opacity-30"
+                    >
+                      <Minus size={13} />
+                    </button>
+                    <span className="w-11 text-center text-xs font-bold tabular-nums text-neon-cyan">
+                      {speed.toFixed(1)}x
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSpeed((value) => Math.min(MAX_SPEED, +(value + SPEED_STEP).toFixed(1)))}
+                      disabled={speed >= MAX_SPEED}
+                      aria-label="Aumentar velocidade"
+                      className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/8 hover:text-white disabled:pointer-events-none disabled:opacity-30"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      scrollRef.current?.scrollTo({ top: 0 })
+                    }}
+                    aria-label="Voltar ao topo"
+                    title="Voltar ao topo"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                  >
+                    <RotateCcw size={15} />
+                  </button>
+
+                  <p className="min-w-0 truncate text-[0.7rem] text-zinc-500">
+                    {playing ? 'rolando a letra…' : 'rola a letra sozinho enquanto o vídeo toca'}
+                  </p>
+                </div>
+              )}
+
+              <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
                 {tab === 'letra' ? (
                   hasLyrics ? (
                     <div className="rounded-2xl border border-white/8 bg-ink-900/60 p-5 sm:p-6">
