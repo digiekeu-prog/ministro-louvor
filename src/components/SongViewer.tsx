@@ -29,9 +29,13 @@ type TextTab = 'letra' | 'cifra'
 
 /** Velocidade base do "rolar" da letra (pixels por segundo em 1x). */
 const SCROLL_BASE = 26
-const MIN_SPEED = 0.5
-const MAX_SPEED = 3
-const SPEED_STEP = 0.5
+/** Velocidades disponíveis, da mais lenta (0.1x) até a mais rápida (3x). */
+const SPEEDS = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3]
+
+/** Formata a velocidade para exibir (1 → "1.0x", 0.25 → "0.25x"). */
+function formatSpeed(value: number): string {
+  return `${Number.isInteger(value) ? value.toFixed(1) : value}x`
+}
 
 interface SongViewerProps {
   song: ServiceSong | null
@@ -65,19 +69,28 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
   useEffect(() => {
     if (!playing) return
     let last = performance.now()
+    // guarda a parte fracionaria: em velocidades baixas o passo fica abaixo
+    // de 1px e seria truncado pelo navegador a cada tick
+    let pending = 0
 
     const tick = () => {
       const now = performance.now()
       const delta = (now - last) / 1000
       last = now
       const element = scrollRef.current
-      if (element) {
-        const max = element.scrollHeight - element.clientHeight
-        if (element.scrollTop >= max - 1) {
-          setPlaying(false)
-          return
-        }
-        element.scrollTop += SCROLL_BASE * speed * delta
+      if (!element) return
+
+      const max = element.scrollHeight - element.clientHeight
+      if (element.scrollTop >= max - 1) {
+        setPlaying(false)
+        return
+      }
+
+      pending += SCROLL_BASE * speed * delta
+      const step = Math.floor(pending)
+      if (step >= 1) {
+        pending -= step
+        element.scrollTop = Math.min(element.scrollTop + step, max)
       }
     }
 
@@ -135,6 +148,8 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
   const hasChords = Boolean(song.chords?.trim())
   const style = media ? SOURCE_STYLE[media.source] : null
   const hasSheet = Boolean(sheet.trim())
+  /** Posição da velocidade atual na lista (para os botões − e +). */
+  const speedIndex = Math.max(0, SPEEDS.indexOf(speed))
 
   async function copyText() {
     const content = [song?.lyrics, song?.chords].filter(Boolean).join('\n\n———\n\n')
@@ -330,20 +345,20 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
                   <div className="flex items-center gap-0.5 rounded-xl bg-white/4 p-0.5 ring-1 ring-white/8">
                     <button
                       type="button"
-                      onClick={() => setSpeed((value) => Math.max(MIN_SPEED, +(value - SPEED_STEP).toFixed(1)))}
-                      disabled={speed <= MIN_SPEED}
+                      onClick={() => setSpeed(SPEEDS[Math.max(0, speedIndex - 1)])}
+                      disabled={speedIndex <= 0}
                       aria-label="Diminuir velocidade"
                       className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/8 hover:text-white disabled:pointer-events-none disabled:opacity-30"
                     >
                       <Minus size={13} />
                     </button>
-                    <span className="w-11 text-center text-xs font-bold tabular-nums text-neon-cyan">
-                      {speed.toFixed(1)}x
+                    <span className="w-13 text-center text-xs font-bold tabular-nums text-neon-cyan">
+                      {formatSpeed(speed)}
                     </span>
                     <button
                       type="button"
-                      onClick={() => setSpeed((value) => Math.min(MAX_SPEED, +(value + SPEED_STEP).toFixed(1)))}
-                      disabled={speed >= MAX_SPEED}
+                      onClick={() => setSpeed(SPEEDS[Math.min(SPEEDS.length - 1, speedIndex + 1)])}
+                      disabled={speedIndex >= SPEEDS.length - 1}
                       aria-label="Aumentar velocidade"
                       className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/8 hover:text-white disabled:pointer-events-none disabled:opacity-30"
                     >
