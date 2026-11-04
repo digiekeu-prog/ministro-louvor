@@ -82,6 +82,11 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
 - **Não abrir o vídeo em outra aba** — pedido explícito do usuário: o player fica dentro do app.
 - Tailwind v4: cores customizadas via `@theme` em `src/index.css` (`ink-*`, `neon-*`); não
   criar arquivo de config do Tailwind.
+- **A página pública (`/escala/:id`) se atualiza sozinha** (8s + quando a tela volta a ficar
+  visível). Sem isso, o integrante que abriu o link no celular via a versão antiga da escala e
+  achava que a nuvem não estava funcionando.
+- **Se o aparelho entrou sem internet, ele volta a sincronizar sozinho** (nova tentativa a cada
+  15s em `AuthContext`). Sem isso o app ficava preso em "Só neste aparelho" para sempre.
 - **Idioma da UI e dos comentários: português do Brasil.**
 - **A mensagem do WhatsApp é curta de propósito** (pedido do usuário): só o culto, o local, o
   recado (observações) e o link público. **Nunca** mandar a lista da equipe nem o repertório no

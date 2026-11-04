@@ -4,7 +4,7 @@ import type { Member } from '../lib/types'
 import { STORAGE_KEYS, readStore, removeStore, writeStore } from '../lib/storage'
 import { AuthContext } from './contexts'
 import type { AuthContextValue } from './contexts'
-import { hasToken, resumeSync, syncLogin, syncLogout, useSyncStatus } from '../lib/sync'
+import { hasToken, markOffline, resumeSync, syncLogin, syncLogout, useSyncStatus } from '../lib/sync'
 
 type SessionUser = { id: string; email: string; name?: string; category?: Member['category'] }
 
@@ -66,17 +66,36 @@ export function AuthProvider({
       resumeSync()
       return
     }
-    // aparelho que entrou antes da sincronização existir: pede o token agora
+
+    // aparelho que entrou antes da sincronização existir (ou que entrou sem
+    // internet): pede o token agora e **tenta de novo** de tempos em tempos,
+    // para voltar a sincronizar sozinho quando a internet voltar.
     let cancelado = false
-    void syncLogin(session.email).then((result) => {
-      if (cancelado) return
-      if (result.ok || result.offline) return
-      // o servidor não conhece mais esta conta: encerra a sessão
-      setSession(null)
-      setAuthError(mensagemDeRecusa(result.reason, result.error))
-    })
+
+    const tentarToken = () => {
+      if (cancelado || hasToken()) return
+      void syncLogin(session.email).then((result) => {
+        if (cancelado) return
+        if (result.ok) return
+        if (result.offline) {
+          // sem internet: avisa na tela e tenta de novo em instantes
+          markOffline(
+            'Sem conexão com o servidor. Você entrou offline: assim que a internet voltar, o app volta a sincronizar sozinho.',
+          )
+          return
+        }
+        // o servidor não conhece mais esta conta: encerra a sessão
+        setSession(null)
+        setAuthError(mensagemDeRecusa(result.reason, result.error))
+      })
+    }
+
+    tentarToken()
+    const intervalo = window.setInterval(tentarToken, 15000)
+
     return () => {
       cancelado = true
+      window.clearInterval(intervalo)
     }
   }, [session])
 
@@ -120,6 +139,9 @@ export function AuthProvider({
         const local = members.find((m) => m.email.toLowerCase() === normalized)
         if (!local) return { ok: false, error: 'Não encontramos uma conta com esse e-mail.' }
         if (!local.active) return { ok: false, error: 'Esta conta está inativa. Fale com o ministro.' }
+        markOffline(
+          'Sem conexão com o servidor. Os dados ficarão só neste aparelho até a internet voltar.',
+        )
         setSession({ id: local.id, email: local.email })
         setAuthError(null)
         return {

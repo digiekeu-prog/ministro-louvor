@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { Logo } from './Logo'
 import { Avatar } from './ui'
-import { SyncBadge, SyncOfferBanner } from './SyncStatus'
+import { SyncAlertBanner, SyncBadge, SyncOfferBanner } from './SyncStatus'
 import { useAuth } from '../store/AuthContext'
 import { cn, firstName, initials } from '../lib/utils'
 
@@ -128,6 +128,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-9">
           <div key={location.pathname} className="animate-fade-up">
+            <SyncAlertBanner />
             <SyncOfferBanner />
             {children}
           </div>

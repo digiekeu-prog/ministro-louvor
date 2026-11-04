@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   CalendarDays,
@@ -8,6 +8,7 @@ import {
   MapPin,
   Music2,
   Play,
+  RefreshCw,
   Search,
   UserRound,
   Users,
@@ -50,43 +51,91 @@ interface EscalaPublica {
   }>
 }
 
+/** De quanto em quanto tempo a página procura a versão nova da escala (ms). */
+const INTERVALO_ATUALIZACAO = 8000
+
 /**
  * Página pública da escala: é o link que o ministro manda no WhatsApp.
  *
  * Não exige login — quem não tem e-mail (ou não quer criar conta) abre e
  * confere se está escalado, além de ver o vídeo, a letra e a cifra.
+ *
+ * A página se **atualiza sozinha**: de tempos em tempos ela pergunta ao
+ * servidor se a escala mudou (e também quando o celular volta para a tela),
+ * para o integrante ver a versão nova sem precisar recarregar.
  */
 export function EscalaPublicaPage() {
   const { id } = useParams()
   const [escala, setEscala] = useState<EscalaPublica | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
+  const [atualizando, setAtualizando] = useState(false)
+  const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
   const [activeSong, setActiveSong] = useState<ServiceSong | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
+  const vivo = useRef(true)
 
   useEffect(() => {
-    let cancelado = false
-    setCarregando(true)
-    fetch(apiUrl(`/api/escala?id=${encodeURIComponent(id ?? '')}`))
-      .then(async (response) => {
+    vivo.current = true
+    return () => {
+      vivo.current = false
+    }
+  }, [])
+
+  /** Busca a escala no servidor (silencioso = sem mostrar a tela de loading). */
+  const carregar = useCallback(
+    async (silencioso = false) => {
+      if (silencioso) setAtualizando(true)
+
+      try {
+        const response = await fetch(apiUrl(`/api/escala?id=${encodeURIComponent(id ?? '')}`))
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(data?.error ?? 'Não foi possível carregar a escala.')
-        return data?.escala as EscalaPublica
-      })
-      .then((data) => {
-        if (!cancelado) setEscala(data)
-      })
-      .catch((error: Error) => {
-        if (!cancelado) setErro(error.message)
-      })
-      .finally(() => {
-        if (!cancelado) setCarregando(false)
-      })
-    return () => {
-      cancelado = true
+        if (!vivo.current) return
+        setEscala(data?.escala as EscalaPublica)
+        setErro(null)
+        setAtualizadoEm(
+          new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        )
+      } catch (error) {
+        if (!vivo.current) return
+        // se já tem escala na tela, continua mostrando (offline) e tenta depois
+        if (!silencioso) {
+          setErro(error instanceof Error ? error.message : 'Não foi possível carregar a escala.')
+        }
+      } finally {
+        if (vivo.current) {
+          setCarregando(false)
+          setAtualizando(false)
+        }
+      }
+    },
+    [id],
+  )
+
+  // primeira carga
+  useEffect(() => {
+    const timer = window.setTimeout(() => void carregar(), 0)
+    return () => window.clearTimeout(timer)
+  }, [carregar])
+
+  // atualização automática: de tempos em tempos e quando o celular volta pra tela
+  useEffect(() => {
+    const intervalo = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void carregar(true)
+    }, INTERVALO_ATUALIZACAO)
+
+    const aoVoltar = () => {
+      if (document.visibilityState === 'visible') void carregar(true)
     }
-  }, [id])
+    document.addEventListener('visibilitychange', aoVoltar)
+
+    return () => {
+      window.clearInterval(intervalo)
+      document.removeEventListener('visibilitychange', aoVoltar)
+    }
+  }, [carregar])
 
   const termo = busca.trim().toLowerCase()
 
@@ -137,12 +186,23 @@ export function EscalaPublicaPage() {
       <header className="border-b border-white/8 bg-ink-900/70 px-4 py-4 backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <Logo size={34} withWordmark />
-          <Link
-            to="/login"
-            className="rounded-full border border-white/10 px-3 py-1.5 text-[0.68rem] font-medium text-zinc-300 transition hover:border-neon-cyan/40 hover:text-white"
-          >
-            Sou ministro · entrar
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void carregar(true)}
+              title="Atualizar agora"
+              className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[0.68rem] font-medium text-zinc-300 transition hover:border-neon-cyan/40 hover:text-white"
+            >
+              <RefreshCw size={12} className={atualizando ? 'animate-spin' : ''} />
+              {atualizadoEm ? `Atualizado às ${atualizadoEm}` : 'Atualizar'}
+            </button>
+            <Link
+              to="/login"
+              className="rounded-full border border-white/10 px-3 py-1.5 text-[0.68rem] font-medium text-zinc-300 transition hover:border-neon-cyan/40 hover:text-white"
+            >
+              Sou ministro · entrar
+            </Link>
+          </div>
         </div>
       </header>
 

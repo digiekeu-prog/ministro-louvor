@@ -58,7 +58,9 @@ const POLL_INTERVAL = 4000
 const MAX_RETRIES = 3
 
 let status: SyncStatus = {
-  state: 'desligado',
+  // começa "conectando": assim que o app abre, o selo já mostra que ele está
+  // tentando falar com o servidor (e não um "Só neste aparelho" que assusta)
+  state: 'conectando',
   lastSyncAt: null,
   pending: 0,
   message: null,
@@ -349,6 +351,20 @@ export function queueOps(ops: SyncOp[]) {
   writeStored(PENDING_KEY, pending)
   setStatus({ pending: pending.length })
   void tick()
+}
+
+/**
+ * Marca que o aparelho está sem conexão com o servidor (entrou offline).
+ * O app mostra um aviso explaining que as alterações ficam guardadas aqui e
+ * vão assim que a internet voltar.
+ */
+export function markOffline(message?: string) {
+  setStatus({
+    state: 'sem_conexao',
+    message:
+      message ??
+      'Sem conexão com o servidor. As alterações ficam guardadas neste aparelho e vão assim que a internet voltar.',
+  })
 }
 
 /**

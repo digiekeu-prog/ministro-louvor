@@ -81,6 +81,74 @@ export function SyncBadge({ className }: { className?: string }) {
 }
 
 /**
+ * Aviso grande quando a sincronização **não** está funcionando.
+ *
+ * A ideia é nunca deixar o ministro "no escuro": se o app não está falando
+ * com o servidor, ele diz o que está acontecendo e o que acontece com as
+ * alterações feitas (ficam guardadas e vão sozinhas).
+ */
+export function SyncAlertBanner() {
+  const status = useSyncStatus()
+
+  if (status.state === 'sincronizado' || status.state === 'conectando') return null
+
+  const aviso = {
+    sem_conexao: {
+      icon: WifiOff,
+      titulo: 'Sem conexão com a nuvem',
+      detalhe:
+        'As alterações que você fizer ficam guardadas neste aparelho e vão para a equipe assim que a internet voltar.',
+      classes: 'border-amber-400/25 bg-amber-400/8 text-amber-100',
+    },
+    sem_acesso: {
+      icon: ShieldAlert,
+      titulo: 'Seu acesso foi removido',
+      detalhe:
+        status.message ??
+        'Seu e-mail não está mais na lista da equipe do servidor. Fale com o ministro.',
+      classes: 'border-red-400/25 bg-red-400/8 text-red-100',
+    },
+    erro: {
+      icon: CloudOff,
+      titulo: 'Não consegui falar com o servidor',
+      detalhe: status.message ?? 'Tente de novo em instantes.',
+      classes: 'border-red-400/25 bg-red-400/8 text-red-100',
+    },
+    desligado: {
+      icon: CloudOff,
+      titulo: 'Este aparelho ainda não está conectado',
+      detalhe:
+        'Você entrou sem internet. Assim que a conexão voltar, o app volta a sincronizar sozinho — por enquanto, o que você mexer fica só aqui.',
+      classes: 'border-white/10 bg-white/4 text-zinc-300',
+    },
+  } as const
+
+  const atual = aviso[status.state as keyof typeof aviso] ?? aviso.desligado
+  const Icon = atual.icon
+
+  return (
+    <div
+      className={cn(
+        'mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3.5',
+        atual.classes,
+      )}
+    >
+      <Icon size={17} className="mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">{atual.titulo}</p>
+        <p className="mt-0.5 text-xs opacity-90">{atual.detalhe}</p>
+        {status.pending > 0 && (
+          <p className="mt-1 text-xs font-medium opacity-90">
+            {status.pending} {status.pending === 1 ? 'alteração guardada' : 'alterações guardadas'} —{' '}
+            vai junto assim que a conexão voltar.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
  * Aviso para o ministro:
  *  - o servidor ainda está com os dados de exemplo (primeira configuração);
  *  - ou há dados neste aparelho que o servidor ainda não conhece.

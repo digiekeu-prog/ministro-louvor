@@ -16,7 +16,9 @@ Interface dark premium (grafite + neon de palco), pensada para leitura no escuro
   **Integrantes sem e-mail não entram no app**: eles recebem o link da escala e só visualizam.
 - **Escala pública por link** (`/escala/:id`): página sem login onde a equipe digita o próprio
   nome e vê "Sim! {nome} está na escala", a função, o repertório, o vídeo, a letra e a cifra.
-  É esse link que o ministro manda no grupo.
+  É esse link que o ministro manda no grupo. **A página se atualiza sozinha** (de 8 em 8
+  segundos e quando o celular volta para a tela), então o integrante vê a versão nova sem
+  precisar recarregar.
 - **Aviso no WhatsApp**: ao salvar a escala, o app monta uma mensagem **curta** (qual culto, o
   local, o recado e o link) e abre o `wa.me` já com o texto escrito — é só tocar em enviar e
   encaminhar para o grupo. A escala e o repertório ficam **dentro do link**, não na mensagem.
@@ -66,7 +68,10 @@ Interface dark premium (grafite + neon de palco), pensada para leitura no escuro
   primeira configuração. Nenhum aparelho consegue, por acidente, apagar a equipe inteira.
 - O selo no topo da tela distingue: **Sincronizado**, **Sincronizando…**, **Sem conexão**
   (sem internet — as alterações ficam guardadas e vão sozinhas quando voltar), **Sem acesso**
-  (o e-mail saiu da lista da equipe) e **Erro**.
+  (o e-mail saiu da lista da equipe) e **Erro**. Quando não está tudo bem, aparece um **aviso
+  grande** no topo da tela explicando o que está acontecendo e o que acontece com as alterações.
+- **Entrou offline? volta a sincronizar sozinho**: o app tenta de novo a cada 15 segundos até
+  conseguir o token do servidor — não fica preso no modo "só neste aparelho".
 
 ## Comandos
 
