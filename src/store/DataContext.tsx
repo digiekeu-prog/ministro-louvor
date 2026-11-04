@@ -7,8 +7,8 @@ import { uid } from '../lib/utils'
 import { DataContext } from './contexts'
 import type { DataContextValue } from './contexts'
 import type { AppData, SyncChange, SyncOp } from '../lib/syncState'
-import { applyOps, changeToOp, deleteOp, resetOp, upsertOp } from '../lib/syncState'
-import { attachSync, queueFullState, queueOps } from '../lib/sync'
+import { applyOps, changeToOp, deleteOp, diffOps, replaceOps, upsertOp } from '../lib/syncState'
+import { attachSync, queueOps } from '../lib/sync'
 
 /** Lê os dados salvos neste aparelho (funciona mesmo sem internet). */
 function loadLocal(): AppData {
@@ -24,8 +24,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(() => loadLocal())
   /** espelho do estado, para calcular as alterações sem esperar o React. */
   const dataRef = useRef(data)
-  /** o estado que veio do servidor, guardado para o caso de troca. */
-  const remoteRef = useRef<AppData | null>(null)
+  /** o estado que veio do servidor (para saber o que falta enviar). */
+  const [remote, setRemote] = useState<AppData | null>(null)
+  /** o servidor ainda está só com os dados de exemplo? */
+  const [pristine, setPristine] = useState(false)
   /** o servidor ainda tem só os dados de exemplo? */
   const [offer, setOffer] = useState(false)
 
@@ -51,21 +53,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // liga o motor de sincronização ao app
   useEffect(() => {
     attachSync({
-      onSnapshot: (remote, pristine) => {
-        remoteRef.current = remote
-        if (pristine) {
+      onSnapshot: (remoteData, isPristine) => {
+        setRemote(remoteData)
+        setPristine(isPristine)
+        if (isPristine) {
           // o servidor ainda está com os dados de exemplo: o ministro decide
           // se quer enviar os dados deste aparelho para a equipe
           setOffer(true)
           return
         }
         setOffer(false)
-        applyRemote(remote)
+        applyRemote(remoteData)
       },
       onChanges: (changes: SyncChange[]) => {
         // chegou alteração de outro aparelho: o servidor já tem os dados reais
         setOffer(false)
+        setPristine(false)
         const ops = changes.map(changeToOp)
+        // o estado do servidor também anda: quem mudou lá já é a versão nova
+        setRemote((anterior) => applyOps(anterior ?? dataRef.current, ops))
         commit(applyOps(dataRef.current, ops), [])
       },
     })
@@ -104,16 +110,38 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const removeMember = useCallback(
     (id: string) => {
       const current = dataRef.current
-      // o membro sai da equipe e dos lugares das escalas
-      const services = current.services.map((s) => ({
-        ...s,
-        slots: s.slots.map((slot) =>
-          slot.memberId === id ? { ...slot, memberId: undefined } : slot,
-        ),
-      }))
       const ops: SyncOp[] = [deleteOp('members', id)]
-      for (const service of services) ops.push(upsertOp('services', service))
-      commit({ ...current, members: current.members.filter((m) => m.id !== id), services }, ops)
+
+      // o membro sai da equipe e dos lugares das escalas (só as escalas que
+      // realmente mudam são enviadas — nada de reescrever a escala inteira)
+      const services = current.services.map((service) => {
+        if (!service.slots.some((slot) => slot.memberId === id)) return service
+        const updated = {
+          ...service,
+          slots: service.slots.map((slot) =>
+            slot.memberId === id ? { ...slot, memberId: undefined } : slot,
+          ),
+        }
+        ops.push(upsertOp('services', updated))
+        return updated
+      })
+
+      // e some a confirmação de presença dele
+      for (const presence of current.presence) {
+        if (presence.memberId === id) {
+          ops.push(deleteOp('presence', `${presence.memberId}:${presence.serviceId}`))
+        }
+      }
+
+      commit(
+        {
+          ...current,
+          members: current.members.filter((m) => m.id !== id),
+          services,
+          presence: current.presence.filter((p) => p.memberId !== id),
+        },
+        ops,
+      )
     },
     [commit],
   )
@@ -199,20 +227,37 @@ export function DataProvider({ children }: { children: ReactNode }) {
       songs: seedSongs,
       presence: seedPresence,
     }
-    commit(next, [resetOp(next)])
+    // vai para a nuvem como operações comuns (apaga o que não é mais exemplo e
+    // reenvia os dados de exemplo) — nunca como "reset" do estado inteiro
+    commit(next, replaceOps(dataRef.current, next))
   }, [commit])
 
-  /** Envia os dados deste aparelho para toda a equipe (só o ministro). */
+  /**
+   * Envia os dados deste aparelho para toda a equipe (só o ministro).
+   *
+   * - servidor ainda com os dados de exemplo: manda o estado inteiro (aí é
+   *   seguro, porque ainda não existe trabalho da equipe);
+   * - servidor já com dados da equipe: manda **só as diferenças** (o que
+   *   existe apenas aqui). Nada do que os outros já editaram é sobrescrito.
+   */
   const sendLocalToTeam = useCallback(() => {
-    queueFullState(dataRef.current)
+    const local = dataRef.current
+    if (pristine) {
+      queueOps([{ op: 'reset', payload: local }])
+    } else {
+      queueOps(diffOps(local, remote))
+    }
     setOffer(false)
-  }, [])
+  }, [pristine, remote])
 
   /** Troca os dados locais pelos que estão na nuvem. */
   const useRemoteData = useCallback(() => {
-    if (remoteRef.current) applyRemote(remoteRef.current)
+    if (remote) applyRemote(remote)
     setOffer(false)
-  }, [applyRemote])
+  }, [applyRemote, remote])
+
+  /** Quantos itens existem só neste aparelho (para o aviso do ministro). */
+  const pendingDiff = useMemo(() => diffOps(data, remote).length, [data, remote])
 
   const value = useMemo<DataContextValue>(
     () => ({
@@ -233,6 +278,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       resetDemoData,
       sync: {
         offer,
+        pendingDiff,
         sendLocal: sendLocalToTeam,
         useRemote: useRemoteData,
       },
@@ -254,6 +300,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       isConfirmed,
       resetDemoData,
       offer,
+      pendingDiff,
       sendLocalToTeam,
       useRemoteData,
     ],

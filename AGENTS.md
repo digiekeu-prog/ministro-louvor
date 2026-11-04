@@ -42,11 +42,22 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
 - **O log no Postgres é a fonte da verdade** (tabela `wf_changes`, append-only). O estado é
   reconstruído aplicando as operações em ordem — por isso dois aparelhos editando ao mesmo tempo
   não se sobrescrevem. Não troque isso por "grava o estado inteiro": perde-se o conflito.
+- **Nunca envie o estado inteiro (`reset`) depois da primeira configuração.** O servidor recusa
+  com 409 (`api/_lib/app.ts`): foi justamente um `reset` acidental que apagou a equipe no
+  passado. O envio do ministro é por **diferenças** (`diffOps` em `src/lib/syncState.ts`): só
+  `upsert` do que existe apenas naquele aparelho, marcado com `onlyIfMissing` para o servidor
+  ignorar o item se ele já existir lá. `reset` só é aceito enquanto o log for o do seed
+  (primeira configuração).
 - **Toda alteração da UI precisa virar operação.** Se um `setState` do `DataContext` não passa
   por `commit(..., ops)`, ela não chega aos outros aparelhos.
+- **Exclusão é operação como qualquer outra** (`delete`) — não existe "apagar só local".
 - **O servidor decide as permissões**: equipe e escalas só podem ser alteradas por `admin`
   (`api/_lib/app.ts`); presença pode ser por qualquer integrante. A UI esconde o botão, mas quem
   protege de verdade é a API.
+- **O selo da sincronização distingue os estados**: `sem_conexao` (sem internet, a fila fica
+  guardada), `sem_acesso` (o e-mail saiu da lista da equipe → a sessão é encerrada e a tela de
+  login explica o motivo) e `erro` (resposta HTTP do servidor). Nunca deixe tudo virar
+  "Offline" silencioso.
 - **O `vercel.json` não pode reescrever `/api`** — a regra é `"/((?!api/).*)"`. Se o rewrite
   voltar a ser `/(.*)`, as functionssomem e o app fica "só neste aparelho".
 - **Modais flutuantes precisam de `Portal`** (`src/components/Portal.tsx`). As páginas usam

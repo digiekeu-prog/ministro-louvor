@@ -41,9 +41,23 @@ Interface dark premium (grafite + neon de palco), pensada para leitura no escuro
   (`/api/sync?since=N`) — por isso todo aparelho converge para o mesmo estado.
 - O log é *append-only*: dois aparelhos editando ao mesmo tempo não sobrescrevem o trabalho um
   do outro (vale o que foi gravado por último).
+- **Exclusão também é operação**: quando alguém remove um integrante, a escala ou uma presença,
+  a exclusão entra na fila e chega em todos os aparelhos — não existe "apagar local".
 - O token de sessão é assinado no servidor (HMAC) e o segredo fica no próprio banco.
 - Permissões no servidor: só **ministros** (`category: admin`) alteram equipe e escalas; qualquer
   integrante confirma a própria presença.
+
+### Nada apaga o trabalho de outro aparelho
+
+- O botão **"Enviar as diferenças"** (do ministro) manda **só o que existe apenas naquele
+  aparelho**. Itens que já estão no servidor não são reenviados, e o servidor aceita essa
+  operação apenas se o item ainda não existir lá (`onlyIfMissing`) — ou seja, uma cópia antiga
+  nunca sobrescreve a versão nova de outro aparelho.
+- O servidor **recusa** qualquer operação que substitua o estado inteiro (`reset`) depois da
+  primeira configuração. Nenhum aparelho consegue, por acidente, apagar a equipe inteira.
+- O selo no topo da tela distingue: **Sincronizado**, **Sincronizando…**, **Sem conexão**
+  (sem internet — as alterações ficam guardadas e vão sozinhas quando voltar), **Sem acesso**
+  (o e-mail saiu da lista da equipe) e **Erro**.
 
 ## Comandos
 
@@ -85,7 +99,11 @@ src/
 
 - **O primeiro acesso**: o banco começa com os dados de exemplo. O ministro vê um aviso para
   **enviar os dados deste aparelho para a equipe** — vale fazer isso no aparelho que tiver os
-  dados mais completos, porque é ele que vira a versão oficial.
+  dados mais completos, porque é ele que vira a versão oficial (é o único caso em que o estado
+  inteiro é enviado; depois disso, o envio é sempre por diferenças).
+- **Login**: o e-mail precisa estar na lista de membros do servidor. Se o e-mail for removido da
+  equipe, o app avisa ("Sem acesso") e leva de volta para a tela de login com a explicação —
+  não fica em "Offline" sem dizer nada.
 - **YouTube só reproduz embed em `localhost`**. Aberto pelo IP da rede, o vídeo é bloqueado
   pelo YouTube — o app mostra um aviso e a letra/cifra continuam funcionando.
 - **O player é interno**: o vídeo toca dentro do app, sem abrir o YouTube em outra aba.

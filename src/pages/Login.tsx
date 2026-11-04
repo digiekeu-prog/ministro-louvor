@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Lock, LogIn, Mail, Music4, ShieldCheck, Users } from 'lucide-react'
+import { Eye, EyeOff, Lock, LogIn, Mail, Music4, ShieldAlert, ShieldCheck, Users } from 'lucide-react'
 import { Logo } from '../components/Logo'
 import { Button, Field, Input } from '../components/ui'
 import { useAuth } from '../store/AuthContext'
 import { useData } from '../store/DataContext'
 
 export function LoginPage() {
-  const { login, loginAs } = useAuth()
+  const { login, loginAs, authError, clearAuthError } = useAuth()
   const { members } = useData()
   const navigate = useNavigate()
 
@@ -28,6 +28,7 @@ export function LoginPage() {
     e.preventDefault()
     setBusy(true)
     setError('')
+    clearAuthError()
     const result = await login(email, password)
     setBusy(false)
     if (!result.ok) {
@@ -41,8 +42,13 @@ export function LoginPage() {
   async function handleQuickLogin(memberId: string) {
     setBusy(true)
     setError('')
-    await loginAs(memberId)
+    clearAuthError()
+    const result = await loginAs(memberId)
     setBusy(false)
+    if (!result.ok) {
+      setError(result.error ?? 'Não foi possível entrar.')
+      return
+    }
     navigate('/app', { replace: true })
   }
 
@@ -127,9 +133,17 @@ export function LoginPage() {
               </div>
             </Field>
 
+            {authError && !error && (
+              <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-200">
+                <ShieldAlert size={16} className="mt-0.5 shrink-0" />
+                <span>{authError}</span>
+              </div>
+            )}
+
             {error && (
-              <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-300">
-                {error}
+              <div className="flex items-start gap-2.5 rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-300">
+                <ShieldAlert size={16} className="mt-0.5 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 

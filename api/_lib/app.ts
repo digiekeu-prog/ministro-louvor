@@ -9,7 +9,7 @@
  */
 
 import type { AppData, SyncChange, SyncOp } from '../../src/lib/syncState.ts'
-import { findMemberByEmail, stateFromChanges } from '../../src/lib/syncState.ts'
+import { findMemberByEmail, itemId, stateFromChanges } from '../../src/lib/syncState.ts'
 import { getSecret, signToken, verifyToken } from './auth.ts'
 import type { Store } from './store.ts'
 
@@ -55,7 +55,10 @@ async function authenticate(
   if (!member || !member.active) {
     return {
       ok: false,
-      result: { status: 401, body: { error: 'Conta não encontrada ou inativa.' } },
+      result: {
+        status: 401,
+        body: { error: 'Conta não encontrada ou inativa na lista da equipe.' },
+      },
     }
   }
 
@@ -155,6 +158,47 @@ export async function handlePush(
         }
       }
     }
+  }
+
+  // Um "reset" substitui o estado inteiro do servidor. Só é aceito enquanto o
+  // log for o do seed (primeira configuração) — depois disso, qualquer aparelho
+  // poderia apagar o trabalho da equipe. Para mandar dados de outro aparelho,
+  // o app envia só as diferenças (upsert/delete do que mudou).
+  if (ops.some((op) => op.op === 'reset')) {
+    const all = await store.allChanges()
+    if (!isPristine(all)) {
+      return {
+        status: 409,
+        body: {
+          error:
+            'O servidor já tem os dados da equipe. Envie apenas as diferenças — o trabalho de outros aparelhos não pode ser apagado.',
+        },
+      }
+    }
+  }
+
+  // Envio por diferenças: a operação só entra se o item ainda NÃO existir no
+  // servidor. Assim, um aparelho com uma cópia antiga não sobrescreve a
+  // versão mais nova que outro aparelho gravou.
+  const soSeFalta = ops.filter(
+    (op): op is Extract<SyncOp, { op: 'upsert' }> =>
+      op.op === 'upsert' && op.onlyIfMissing === true,
+  )
+  if (soSeFalta.length) {
+    const jaExiste = new Set<string>()
+    const colecoes = [...new Set(soSeFalta.map((op) => op.collection))]
+    for (const collection of colecoes) {
+      const estado = stateFromChanges(await store.allChanges(collection))
+      const lista = estado[collection] as unknown[]
+      for (const item of lista) jaExiste.add(itemId(collection, item))
+    }
+    const filtradas = ops.filter(
+      (op) => !(op.op === 'upsert' && op.onlyIfMissing === true && jaExiste.has(op.id)),
+    )
+    if (filtradas.length === 0) {
+      return { status: 200, body: { seq: lastSeq(await store.allChanges()), changes: [] } }
+    }
+    ops.splice(0, ops.length, ...filtradas)
   }
 
   const inserted = await store.append(ops, auth.email)

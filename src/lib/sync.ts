@@ -16,7 +16,16 @@ import type { AppData, SyncChange, SyncOp } from './syncState'
 import type { Member } from './types'
 import { normalizeData } from './syncState'
 
-export type SyncState = 'desligado' | 'conectando' | 'sincronizado' | 'erro'
+export type SyncState =
+  | 'desligado'
+  | 'conectando'
+  | 'sincronizado'
+  | 'sem_conexao'
+  | 'sem_acesso'
+  | 'erro'
+
+/** Motivo pelo qual o login foi recusado pelo servidor. */
+export type LoginFailure = 'desconhecido' | 'inativo' | 'sem_conexao' | 'erro'
 
 export interface SyncStatus {
   state: SyncState
@@ -142,14 +151,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 /**
  * Pede um token ao servidor para o e-mail informado.
  *
- * Devolve { ok: false, offline: true } quando o servidor não pode ser
- * alcançado (aí o app entra no modo local) e { ok: false } quando o
- * servidor recusou o e-mail.
+ * Devolve { ok: false, reason: 'sem_conexao' } quando o servidor não pode
+ * ser alcançado (aí o app entra no modo local) e { ok: false } com o
+ * motivo (`desconhecido`, `inativo` ou `erro`) quando o servidor recusou
+ * o e-mail.
  */
 export async function syncLogin(email: string): Promise<{
   ok: boolean
   error?: string
   offline?: boolean
+  reason?: LoginFailure
   user?: { id: string; name: string; email: string; category: Member['category'] }
 }> {
   try {
@@ -168,10 +179,19 @@ export async function syncLogin(email: string): Promise<{
     start()
     return { ok: true, user: data.user }
   } catch (error) {
-    if (error instanceof SyncError) return { ok: false, error: error.message }
+    if (error instanceof SyncError) {
+      const reason: LoginFailure =
+        error.status === 404
+          ? 'desconhecido'
+          : error.status === 403
+            ? 'inativo'
+            : 'erro'
+      return { ok: false, error: error.message, reason }
+    }
     return {
       ok: false,
       offline: true,
+      reason: 'sem_conexao',
       error: 'Sem conexão com o servidor. Os dados ficarão só neste aparelho.',
     }
   }
@@ -259,10 +279,59 @@ async function tick() {
     })
   } catch (error) {
     failures += 1
-    const expired = error instanceof SyncError && error.status === 401
+    const statusCode = error instanceof SyncError ? error.status : 0
+    const mensagem = error instanceof Error ? error.message : 'Erro ao sincronizar.'
+
+    if (statusCode === 401) {
+      // a sessão não vale mais: o e-mail saiu da lista da equipe (ou o token
+      // venceu). O app avisa e leva a pessoa para a tela de login.
+      stop()
+      token = null
+      seq = 0
+      try {
+        window.localStorage.removeItem(TOKEN_KEY)
+        window.localStorage.removeItem(SEQ_KEY)
+      } catch {
+        /* ignore */
+      }
+      setStatus({
+        state: 'sem_acesso',
+        lastSyncAt: null,
+        message: mensagem,
+        pending: pending.length,
+      })
+      return
+    }
+
+    if (statusCode === 403) {
+      // o servidor recusou a alteração (permissão): não adianta reenviar a
+      // mesma fila para sempre — ela fica guardada no aparelho.
+      pending = []
+      writeStored(PENDING_KEY, pending)
+      setStatus({ state: 'erro', message: mensagem, pending: 0 })
+      return
+    }
+
+    if (statusCode === 409) {
+      // o servidor recusou substituir o estado inteiro (o da equipe já vale):
+      // tira da fila essa operação e segue com as demais
+      pending = pending.filter((op) => op.op !== 'reset')
+      writeStored(PENDING_KEY, pending)
+      setStatus({ state: 'erro', message: mensagem, pending: pending.length })
+      return
+    }
+
+    // erro de rede (fetch quebrou) = sem internet; resposta HTTP = erro do servidor
+    const semConexao = !(error instanceof SyncError)
     setStatus({
-      state: expired ? 'erro' : failures >= MAX_RETRIES ? 'erro' : 'conectando',
-      message: error instanceof Error ? error.message : 'Erro ao sincronizar.',
+      state: semConexao
+        ? failures >= MAX_RETRIES
+          ? 'sem_conexao'
+          : 'conectando'
+        : 'erro',
+      message: semConexao
+        ? 'Sem conexão com o servidor. As alterações ficam guardadas neste aparelho e vão assim que a internet voltar.'
+        : mensagem,
       pending: pending.length,
     })
   } finally {
@@ -281,7 +350,13 @@ export function queueOps(ops: SyncOp[]) {
   void tick()
 }
 
-/** Envia o estado inteiro deste aparelho (botão do ministro). */
+/**
+ * Envia o estado inteiro deste aparelho.
+ *
+ * Só é usado na **primeira configuração** (quando o servidor ainda tem
+ * somente os dados de exemplo). Depois disso o envio é por diferenças, para
+ * nunca sobrescrever o trabalho de outro aparelho.
+ */
 export function queueFullState(data: AppData) {
   queueOps([{ op: 'reset', payload: data }])
 }

@@ -42,7 +42,11 @@ export function PerfilPage() {
   }
 
   function handleReset() {
-    if (window.confirm('Restaurar os dados de demonstração? Suas alterações serão perdidas.')) {
+    if (
+      window.confirm(
+        'Restaurar os dados de demonstração? Isto vale para toda a equipe (celulares e notebooks) e não pode ser desfeito.',
+      )
+    ) {
       resetDemoData()
       setMessage('Dados de demonstração restaurados.')
     }

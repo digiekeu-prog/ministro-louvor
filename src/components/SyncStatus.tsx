@@ -1,5 +1,14 @@
 import { useState } from 'react'
-import { CheckCircle2, CloudOff, RefreshCw, TriangleAlert, Upload, Users } from 'lucide-react'
+import {
+  CheckCircle2,
+  CloudOff,
+  RefreshCw,
+  ShieldAlert,
+  TriangleAlert,
+  Upload,
+  Users,
+  WifiOff,
+} from 'lucide-react'
 import { useSyncStatus } from '../lib/sync'
 import { useData } from '../store/DataContext'
 import { useAuth } from '../store/AuthContext'
@@ -24,10 +33,20 @@ export function SyncBadge({ className }: { className?: string }) {
       texto: 'Sincronizando…',
       classes: 'text-neon-cyan/90 ring-neon-cyan/25 bg-neon-cyan/8',
     },
+    sem_conexao: {
+      icon: WifiOff,
+      texto: status.pending > 0 ? `Sem conexão (${status.pending})` : 'Sem conexão',
+      classes: 'text-amber-300/90 ring-amber-400/25 bg-amber-400/8',
+    },
+    sem_acesso: {
+      icon: ShieldAlert,
+      texto: 'Sem acesso',
+      classes: 'text-red-300/90 ring-red-400/25 bg-red-400/8',
+    },
     erro: {
       icon: CloudOff,
-      texto: status.pending > 0 ? `Offline (${status.pending})` : 'Offline',
-      classes: 'text-amber-300/90 ring-amber-400/25 bg-amber-400/8',
+      texto: status.pending > 0 ? `Erro (${status.pending})` : 'Erro',
+      classes: 'text-red-300/90 ring-red-400/25 bg-red-400/8',
     },
     desligado: {
       icon: CloudOff,
@@ -62,15 +81,22 @@ export function SyncBadge({ className }: { className?: string }) {
 }
 
 /**
- * Aviso para o ministro: o servidor ainda está com os dados de exemplo e ele
- * pode enviar os dados deste aparelho para toda a equipe.
+ * Aviso para o ministro:
+ *  - o servidor ainda está com os dados de exemplo (primeira configuração);
+ *  - ou há dados neste aparelho que o servidor ainda não conhece.
+ *
+ * O envio é sempre por diferenças: nada do que os outros já editaram no
+ * servidor é sobrescrito.
  */
 export function SyncOfferBanner() {
   const { sync } = useData()
   const { isAdmin } = useAuth()
   const [confirmando, setConfirmando] = useState(false)
 
-  if (!sync.offer || !isAdmin) return null
+  if (!isAdmin) return null
+  if (!sync.offer && sync.pendingDiff === 0) return null
+
+  const primeiraConfig = sync.offer
 
   return (
     <>
@@ -81,45 +107,67 @@ export function SyncOfferBanner() {
           </span>
           <div className="min-w-0">
             <p className="font-display text-sm font-semibold text-white">
-              Preparar os dados compartilhados da equipe
+              {primeiraConfig
+                ? 'Preparar os dados compartilhados da equipe'
+                : 'Há dados neste aparelho que a equipe ainda não tem'}
             </p>
             <p className="mt-0.5 text-xs text-zinc-300/80">
-              O servidor ainda está com os dados de exemplo. Envie os dados deste aparelho para
-              que todo mundo — celular e notebook — veja as mesmas escalas.
+              {primeiraConfig
+                ? 'O servidor ainda está com os dados de exemplo. Envie os dados deste aparelho para que todo mundo — celular e notebook — veja as mesmas escalas.'
+                : `${sync.pendingDiff} ${sync.pendingDiff === 1 ? 'item existe' : 'itens existem'} só neste aparelho. Envie só as diferenças: o que os outros já editaram não é sobrescrito.`}
             </p>
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
-          <Button size="sm" onClick={sync.sendLocal}>
-            <Upload size={14} /> Enviar meus dados
+          <Button size="sm" onClick={() => setConfirmando(true)}>
+            <Upload size={14} /> {primeiraConfig ? 'Enviar meus dados' : 'Enviar as diferenças'}
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setConfirmando(true)}>
-            Usar os da nuvem
-          </Button>
+          {primeiraConfig && (
+            <Button size="sm" variant="ghost" onClick={sync.useRemote}>
+              Usar os da nuvem
+            </Button>
+          )}
         </div>
       </div>
 
       <Modal
         open={confirmando}
         onClose={() => setConfirmando(false)}
-        title="Trocar pelos dados da nuvem?"
-        description="As alterações que existem só neste aparelho serão descartadas e valerá o que está salvo no servidor da equipe."
+        title={primeiraConfig ? 'Enviar os dados deste aparelho?' : 'Enviar as diferenças?'}
+        description={
+          primeiraConfig
+            ? 'O servidor ainda está com os dados de exemplo, então os dados deste aparelho passam a ser a versão oficial da equipe.'
+            : 'Só o que existe apenas neste aparelho será enviado. O que os outros já editaram no servidor continua valendo.'
+        }
       >
-        <div className="flex items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-400/8 px-4 py-3 text-sm text-amber-100">
-          <TriangleAlert size={16} className="mt-0.5 shrink-0" />
-          <span>Tem certeza? Essa ação não pode ser desfeita.</span>
+        <div className="flex items-start gap-3 rounded-xl border border-neon-cyan/25 bg-neon-cyan/8 px-4 py-3 text-sm text-zinc-200">
+          <Upload size={16} className="mt-0.5 shrink-0 text-neon-cyan" />
+          <span>
+            {primeiraConfig
+              ? 'Depois disso, o envio passa a ser só por diferenças — nenhum aparelho consegue apagar o trabalho de outro.'
+              : 'As exclusões que você fez já são enviadas automaticamente, uma a uma.'}
+          </span>
         </div>
+        {!primeiraConfig && (
+          <div className="mt-3 flex items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-400/8 px-4 py-3 text-sm text-amber-100">
+            <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+            <span>
+              Confira se o que você quer compartilhar está completo aqui — o envio não apaga nada do
+              servidor.
+            </span>
+          </div>
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setConfirmando(false)}>
             Cancelar
           </Button>
           <Button
             onClick={() => {
-              sync.useRemote()
+              sync.sendLocal()
               setConfirmando(false)
             }}
           >
-            Usar os dados da nuvem
+            {primeiraConfig ? 'Enviar tudo' : 'Enviar as diferenças'}
           </Button>
         </div>
       </Modal>

@@ -4,9 +4,23 @@ import type { Member } from '../lib/types'
 import { STORAGE_KEYS, readStore, removeStore, writeStore } from '../lib/storage'
 import { AuthContext } from './contexts'
 import type { AuthContextValue } from './contexts'
-import { hasToken, resumeSync, syncLogin, syncLogout } from '../lib/sync'
+import { hasToken, resumeSync, syncLogin, syncLogout, useSyncStatus } from '../lib/sync'
 
 type SessionUser = { id: string; email: string; name?: string; category?: Member['category'] }
+
+/** Mensagem que explica, em português, por que o acesso foi recusado. */
+function mensagemDeRecusa(reason?: string, fallback?: string): string {
+  switch (reason) {
+    case 'desconhecido':
+      return 'Este e-mail não está mais na lista da equipe do servidor. Fale com o ministro para voltar a ter acesso.'
+    case 'inativo':
+      return 'Esta conta está inativa. Fale com o ministro para reativar o acesso.'
+    case 'sem_conexao':
+      return 'Sem conexão com o servidor. Os dados ficarão só neste aparelho até a internet voltar.'
+    default:
+      return fallback ?? 'Não foi possível entrar.'
+  }
+}
 
 /**
  * Sessão da equipe.
@@ -25,11 +39,25 @@ export function AuthProvider({
   const [session, setSession] = useState<SessionUser | null>(() =>
     readStore<SessionUser | null>(STORAGE_KEYS.session, null),
   )
+  /** aviso mostrado na tela de login (ex.: acesso removido da lista da equipe) */
+  const [authError, setAuthError] = useState<string | null>(null)
+  const status = useSyncStatus()
 
   useEffect(() => {
     if (session) writeStore(STORAGE_KEYS.session, session)
     else removeStore(STORAGE_KEYS.session)
   }, [session])
+
+  // o servidor recusou a sessão (o e-mail saiu da lista da equipe ou o token
+  // venceu): encerra a sessão local e explica o motivo na tela de login
+  useEffect(() => {
+    if (status.state !== 'sem_acesso') return
+    setSession(null)
+    setAuthError(
+      status.message ??
+        'Seu acesso foi removido da lista da equipe. Fale com o ministro para voltar a entrar.',
+    )
+  }, [status.state, status.message])
 
   // já existe sessão salva? então volta a sincronizar com a nuvem
   useEffect(() => {
@@ -42,8 +70,10 @@ export function AuthProvider({
     let cancelado = false
     void syncLogin(session.email).then((result) => {
       if (cancelado) return
-      // o servidor não conhece mais esta conta: encerra a session
-      if (!result.ok && !result.offline) setSession(null)
+      if (result.ok || result.offline) return
+      // o servidor não conhece mais esta conta: encerra a sessão
+      setSession(null)
+      setAuthError(mensagemDeRecusa(result.reason, result.error))
     })
     return () => {
       cancelado = true
@@ -76,11 +106,13 @@ export function AuthProvider({
       if (!normalized) return { ok: false, error: 'Informe o e-mail.' }
       if (!password) return { ok: false, error: 'Informe a senha.' }
 
-      // primeiro o servidor (a lista de-members compartilhada é a oficial)
+      // primeiro o servidor (a lista de membros compartilhada é a oficial)
       const remote = await syncLogin(normalized)
 
       if (!remote.ok && !remote.offline) {
-        return { ok: false, error: remote.error ?? 'Não foi possível entrar.' }
+        const mensagem = mensagemDeRecusa(remote.reason, remote.error)
+        setAuthError(mensagem)
+        return { ok: false, error: mensagem }
       }
 
       // sem internet: vale a lista que está salva neste aparelho
@@ -89,6 +121,7 @@ export function AuthProvider({
         if (!local) return { ok: false, error: 'Não encontramos uma conta com esse e-mail.' }
         if (!local.active) return { ok: false, error: 'Esta conta está inativa. Fale com o ministro.' }
         setSession({ id: local.id, email: local.email })
+        setAuthError(null)
         return {
           ok: true,
           warning: 'Sem internet: os dados ficarão só neste aparelho até a conexão voltar.',
@@ -102,6 +135,7 @@ export function AuthProvider({
         name: info?.name,
         category: info?.category,
       })
+      setAuthError(null)
       return { ok: true }
     },
     [members],
@@ -110,9 +144,21 @@ export function AuthProvider({
   const loginAs = useCallback(
     async (memberId: string) => {
       const member = members.find((m) => m.id === memberId)
-      if (!member) return
-      await syncLogin(member.email)
-      setSession({ id: member.id, email: member.email, name: member.name, category: member.category })
+      if (!member) return { ok: false, error: 'Integrante não encontrado.' }
+      const remote = await syncLogin(member.email)
+      if (!remote.ok && !remote.offline) {
+        const mensagem = mensagemDeRecusa(remote.reason, remote.error)
+        setAuthError(mensagem)
+        return { ok: false, error: mensagem }
+      }
+      setSession({
+        id: member.id,
+        email: member.email,
+        name: member.name,
+        category: member.category,
+      })
+      setAuthError(null)
+      return { ok: true }
     },
     [members],
   )
@@ -120,18 +166,23 @@ export function AuthProvider({
   const logout = useCallback(() => {
     syncLogout()
     setSession(null)
+    setAuthError(null)
   }, [])
+
+  const clearAuthError = useCallback(() => setAuthError(null), [])
 
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
       user,
       isAdmin: user?.category === 'admin',
+      authError,
+      clearAuthError,
       login,
       loginAs,
       logout,
     }),
-    [session, user, login, loginAs, logout],
+    [session, user, authError, clearAuthError, login, loginAs, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

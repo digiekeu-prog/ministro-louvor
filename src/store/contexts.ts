@@ -7,7 +7,9 @@ export interface SyncControls {
    * os dados deste aparelho para toda a equipe.
    */
   offer: boolean
-  /** Envia os dados deste aparelho para toda a equipe. */
+  /** Quantos itens existem só neste aparelho (ainda não estão no servidor). */
+  pendingDiff: number
+  /** Envia os dados deste aparelho para toda a equipe (por diferenças). */
   sendLocal: () => void
   /** Troca os dados locais pelos que estão na nuvem. */
   useRemote: () => void
@@ -36,11 +38,15 @@ export interface AuthContextValue {
   session: { id: string; email: string } | null
   user: Member | null
   isAdmin: boolean
+  /** Mensagem que explica por que o acesso foi recusado (tela de login). */
+  authError: string | null
+  /** Limpa a mensagem de erro (quando a pessoa corrige o e-mail). */
+  clearAuthError: () => void
   login: (
     email: string,
     password: string,
   ) => Promise<{ ok: boolean; error?: string; warning?: string }>
-  loginAs: (memberId: string) => Promise<void>
+  loginAs: (memberId: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void
 }
 

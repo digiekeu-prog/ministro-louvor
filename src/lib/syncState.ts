@@ -31,7 +31,18 @@ export const EMPTY_DATA: AppData = {
 }
 
 export type SyncOp =
-  | { op: 'upsert'; collection: Collection; id: string; payload: unknown }
+  | {
+      op: 'upsert'
+      collection: Collection
+      id: string
+      payload: unknown
+      /**
+       * Envia só se o item ainda não existir no servidor (usado no envio por
+       * diferenças). Assim o servidor nunca é sobrescrito com uma versão
+       * antiga que o aparelho tinha guardado.
+       */
+      onlyIfMissing?: boolean
+    }
   | { op: 'delete'; collection: Collection; id: string }
   /** Substitui tudo (usado na primeira sincronização e no botão do ministro). */
   | { op: 'reset'; payload: AppData }
@@ -147,8 +158,10 @@ export function findMemberByEmail(data: AppData, email: string): Member | undefi
 }
 
 /** Monta a operação de criação/edição de um item. */
-export function upsertOp(collection: Collection, item: unknown): SyncOp {
-  return { op: 'upsert', collection, id: itemId(collection, item), payload: item }
+export function upsertOp(collection: Collection, item: unknown, onlyIfMissing = false): SyncOp {
+  return onlyIfMissing
+    ? { op: 'upsert', collection, id: itemId(collection, item), payload: item, onlyIfMissing: true }
+    : { op: 'upsert', collection, id: itemId(collection, item), payload: item }
 }
 
 /** Monta a operação de exclusão de um item. */
@@ -159,6 +172,67 @@ export function deleteOp(collection: Collection, id: string): SyncOp {
 /** Operação que substitui o estado inteiro. */
 export function resetOp(data: AppData): SyncOp {
   return { op: 'reset', payload: data }
+}
+
+/** Coleções compartilhadas, na ordem em que são percorridas. */
+const COLLECTIONS: Collection[] = ['members', 'services', 'songs', 'presence']
+
+/**
+ * Operações para levar ao servidor o que existe **só** neste aparelho.
+ *
+ * Regras de ouro (para nunca sobrescrever o trabalho de outro aparelho):
+ *  - item que já existe no servidor **não** é reenviado: quem editou lá pode
+ *    ter uma versão mais nova, e o app manda a alteração dele pela fila de
+ *    operações, não por aqui;
+ *  - nada é apagado: as exclusões viajam na fila como operação `delete`,
+ *    então chegam sozinhas — aqui a gente só acrescenta o que falta.
+ *
+ * Ou seja: só entram `upsert` de itens que o servidor ainda não conhece.
+ */
+export function diffOps(local: AppData, remote: AppData | null): SyncOp[] {
+  if (!remote) return []
+  const ops: SyncOp[] = []
+
+  for (const collection of COLLECTIONS) {
+    const remoteIds = new Set(remote[collection].map((item) => itemId(collection, item)))
+    for (const item of local[collection]) {
+      const id = itemId(collection, item)
+      if (!remoteIds.has(id)) ops.push(upsertOp(collection, item, true))
+    }
+  }
+
+  return ops
+}
+
+/**
+ * Operações para deixar o servidor exatamente como `next` (usado no botão
+ * "restaurar dados de demonstração"). Ao contrário do `diffOps`, aqui as
+ * exclusões também são enviadas — é uma ação explícita do ministro.
+ */
+export function replaceOps(current: AppData, next: AppData): SyncOp[] {
+  const ops: SyncOp[] = []
+
+  for (const collection of COLLECTIONS) {
+    const nextIds = new Set(next[collection].map((item) => itemId(collection, item)))
+    const currentById = new Map(
+      current[collection].map((item) => [itemId(collection, item), item]),
+    )
+
+    for (const item of current[collection]) {
+      const id = itemId(collection, item)
+      if (!nextIds.has(id)) ops.push(deleteOp(collection, id))
+    }
+
+    for (const item of next[collection]) {
+      const id = itemId(collection, item)
+      const before = currentById.get(id)
+      if (!before || JSON.stringify(before) !== JSON.stringify(item)) {
+        ops.push(upsertOp(collection, item))
+      }
+    }
+  }
+
+  return ops
 }
 
 export type { Member, Presence, Service, Song }
