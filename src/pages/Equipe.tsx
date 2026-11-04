@@ -37,7 +37,8 @@ export function EquipePage() {
         const matchesQuery =
           !query.trim() ||
           m.name.toLowerCase().includes(query.toLowerCase()) ||
-          m.email.toLowerCase().includes(query.toLowerCase()) ||
+          (m.email ?? '').toLowerCase().includes(query.toLowerCase()) ||
+          (m.phone ?? '').toLowerCase().includes(query.toLowerCase()) ||
           m.skills.some((s) => s.toLowerCase().includes(query.toLowerCase()))
         return matchesCategory && matchesQuery
       }),
@@ -68,7 +69,8 @@ export function EquipePage() {
 
     const payload = {
       name: form.name.trim(),
-      email: form.email.trim() || `${form.name.trim().toLowerCase().replace(/\s+/g, '.')}@worshipflow.app`,
+      // e-mail é opcional: quem não usa e-mail só vai visualizar a escala
+      email: form.email.trim(),
       phone: form.phone.trim() || undefined,
       category: form.category,
       skills: form.skills.length
@@ -195,7 +197,9 @@ export function EquipePage() {
                     </h3>
                     {!member.active && <Badge tone="red">Inativo</Badge>}
                   </div>
-                  <p className="truncate text-xs text-zinc-500">{member.email}</p>
+                  <p className="truncate text-xs text-zinc-500">
+                    {member.email || member.phone || 'Só visualiza (sem e-mail)'}
+                  </p>
                   <div className="mt-2">
                     <Badge
                       tone={
@@ -277,7 +281,10 @@ export function EquipePage() {
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="E-mail">
+            <Field
+              label="E-mail (opcional)"
+              hint="Só quem vai entrar no app precisa de e-mail. Sem ele, a pessoa recebe a escala pelo link do WhatsApp."
+            >
               <Input
                 type="email"
                 value={form.email}

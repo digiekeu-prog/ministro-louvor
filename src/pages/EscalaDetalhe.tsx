@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   CalendarDays,
@@ -8,6 +8,7 @@ import {
   FileText,
   Guitar,
   MapPin,
+  MessageCircle,
   Music2,
   Pencil,
   Play,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react'
 import { Avatar, Badge, Button, Card, EmptyState } from '../components/ui'
 import { SongViewer } from '../components/SongViewer'
+import { WhatsAppShare } from '../components/WhatsappShare'
 import { useAuth } from '../store/AuthContext'
 import { useData } from '../store/DataContext'
 import type { Category, ServiceSong } from '../lib/types'
@@ -26,11 +28,19 @@ import { cn, formatDateLong, formatTime, relativeDay } from '../lib/utils'
 export function EscalaDetalhePage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, isAdmin } = useAuth()
   const { getService, getMember, setPresence, isConfirmed } = useData()
 
   const [activeSong, setActiveSong] = useState<ServiceSong | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+
+  // acabou de salvar no editor? então abre o aviso do WhatsApp
+  useEffect(() => {
+    const state = location.state as { compartilhar?: boolean } | null
+    if (state?.compartilhar) setShareOpen(true)
+  }, [location.state])
 
   const service = getService(id)
 
@@ -99,6 +109,11 @@ export function EscalaDetalhePage() {
             {isAdmin && (
               <Button onClick={() => navigate(`/app/escalas/${service.id}/editar`)}>
                 <Pencil size={15} /> Editar escala
+              </Button>
+            )}
+            {isAdmin && (
+              <Button variant="secondary" onClick={() => setShareOpen(true)}>
+                <MessageCircle size={15} /> Avisar no WhatsApp
               </Button>
             )}
             {user && mySlot && (
@@ -308,6 +323,11 @@ export function EscalaDetalhePage() {
 
       {/* Visualizador interno de música */}
       <SongViewer song={activeSong} open={viewerOpen} onClose={() => setViewerOpen(false)} />
+
+      {/* Aviso no WhatsApp */}
+      {isAdmin && (
+        <WhatsAppShare service={service} open={shareOpen} onClose={() => setShareOpen(false)} />
+      )}
     </div>
   )
 }

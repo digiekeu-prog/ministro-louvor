@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { KeyRound, LogOut, RefreshCcw, ShieldCheck, Sparkles } from 'lucide-react'
+import { KeyRound, LogOut, MessageCircle, RefreshCcw, ShieldCheck, Sparkles } from 'lucide-react'
 import { PageTitle } from '../components/AppShell'
 import { Logo } from '../components/Logo'
 import { Avatar, Badge, Button, Card, Field, Input } from '../components/ui'
@@ -10,12 +10,13 @@ import { CATEGORY_SINGULAR } from '../lib/types'
 
 export function PerfilPage() {
   const { user, isAdmin, logout } = useAuth()
-  const { services, presence, resetDemoData } = useData()
+  const { services, presence, resetDemoData, updateMember } = useData()
   const navigate = useNavigate()
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [message, setMessage] = useState('')
+  const [whatsapp, setWhatsapp] = useState(user?.whatsapp ?? user?.phone ?? '')
 
   if (!user) return null
 
@@ -25,6 +26,15 @@ export function PerfilPage() {
   function handleLogout() {
     logout()
     navigate('/login', { replace: true })
+  }
+
+  function handleWhatsapp() {
+    updateMember(user!.id, { whatsapp: whatsapp.trim() || undefined })
+    setMessage(
+      whatsapp.trim()
+        ? 'WhatsApp salvo. Agora a escala abre direto no seu WhatsApp.'
+        : 'WhatsApp removido. Você ainda pode copiar a mensagem.',
+    )
   }
 
   function handlePassword() {
@@ -98,6 +108,38 @@ export function PerfilPage() {
               <div className="rounded-2xl bg-white/3 p-4 text-center">
                 <p className="font-display text-2xl font-bold text-white">{user.skills.length}</p>
                 <p className="text-[0.68rem] uppercase tracking-[0.14em] text-zinc-500">Funções</p>
+              </div>
+            </div>
+          </Card>
+
+          {/* WhatsApp */}
+          <Card>
+            <div className="border-b border-white/8 px-5 py-4 sm:px-6">
+              <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-white">
+                <MessageCircle size={18} className="text-neon-cyan" />
+                Avisos no WhatsApp
+              </h2>
+              <p className="mt-0.5 text-sm text-zinc-400">
+                Quando você salva uma escala, o app monta a mensagem e abre aqui no seu WhatsApp
+                para você mandar no grupo.
+              </p>
+            </div>
+            <div className="grid gap-4 p-5 sm:p-6">
+              <Field
+                label="Meu WhatsApp"
+                hint="Com DDD e código do país (ex.: 5511999998888). Se deixar vazio, você ainda pode copiar a mensagem."
+              >
+                <Input
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(e.target.value)}
+                  placeholder="5511999998888"
+                  inputMode="tel"
+                />
+              </Field>
+              <div>
+                <Button variant="secondary" onClick={handleWhatsapp}>
+                  <MessageCircle size={15} /> Salvar WhatsApp
+                </Button>
               </div>
             </div>
           </Card>

@@ -11,7 +11,7 @@
 import { createServer } from 'node:http'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
-import { handleLogin, handlePull, handlePush } from '../api/_lib/app.ts'
+import { handleLogin, handlePull, handlePublicScale, handlePush } from '../api/_lib/app.ts'
 import type { Store } from '../api/_lib/store.ts'
 import type { Collection, SyncChange, SyncOp } from '../src/lib/syncState.ts'
 import { seedMembers, seedPresence, seedServices, seedSongs } from '../src/lib/seed.ts'
@@ -125,6 +125,13 @@ const servidor = createServer(async (req, res) => {
   try {
     if (url.pathname === '/api/login' && req.method === 'POST') {
       const result = await handleLogin(store, (await corpo(req)) as { email?: string } | null)
+      res.statusCode = result.status
+      res.end(JSON.stringify(result.body))
+      return
+    }
+
+    if (url.pathname === '/api/escala' && req.method === 'GET') {
+      const result = await handlePublicScale(store, url.searchParams.get('id') ?? '')
       res.statusCode = result.status
       res.end(JSON.stringify(result.body))
       return

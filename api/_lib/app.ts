@@ -132,6 +132,63 @@ export async function handlePull(store: Store, since: number, token: string | nu
   }
 }
 
+/**
+ * GET /api/escala?id=svc_xxx — dados da escala para quem só vai **visualizar**
+ * (sem login). É o link que o ministro manda no grupo da equipe.
+ *
+ * Não devolve e-mail, telefone nem confirmação de presença: só o que a
+ * equipe precisa ver (quem está escalado e o repertório com letra/cifra).
+ */
+export async function handlePublicScale(store: Store, id: string): Promise<ApiResult> {
+  await store.ensure()
+
+  const scaleId = (id ?? '').trim()
+  if (!scaleId) return { status: 400, body: { error: 'Informe a escala.' } }
+
+  const state = stateFromChanges(await store.allChanges())
+  const service = state.services.find((s) => s.id === scaleId)
+  if (!service) return { status: 404, body: { error: 'Escala não encontrada.' } }
+
+  const porId = new Map(state.members.map((member) => [member.id, member]))
+
+  return {
+    status: 200,
+    body: {
+      escala: {
+        id: service.id,
+        title: service.title,
+        date: service.date,
+        time: service.time,
+        location: service.location ?? null,
+        status: service.status,
+        notes: service.notes ?? null,
+        equipe: service.slots
+          .filter((slot) => slot.memberId)
+          .map((slot) => {
+            const member = porId.get(slot.memberId ?? '')
+            return {
+              memberId: slot.memberId ?? '',
+              nome: member?.name ?? 'Vaga em aberto',
+              funcao: slot.functionName,
+              categoria: slot.category,
+              observacao: slot.notes ?? null,
+            }
+          }),
+        musicas: service.songs.map((song) => ({
+          title: song.title,
+          artist: song.artist ?? null,
+          link: song.link ?? null,
+          lyrics: song.lyrics ?? null,
+          chords: song.chords ?? null,
+          key: song.key ?? null,
+          bpm: song.bpm ?? null,
+          progression: song.progression ?? null,
+        })),
+      },
+    },
+  }
+}
+
 /** POST /api/sync — envia as alterações deste aparelho para o servidor. */
 export async function handlePush(
   store: Store,

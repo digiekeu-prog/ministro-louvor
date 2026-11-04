@@ -5,8 +5,11 @@ export type MemberCategory = Category | 'admin'
 export interface Member {
   id: string
   name: string
+  /** E-mail (opcional): só quem vai entrar no app precisa de um. */
   email: string
   phone?: string
+  /** WhatsApp do ministro: é para ele que chega a mensagem da escala. */
+  whatsapp?: string
   category: MemberCategory
   /** Funções que a pessoa pode executar (ex.: 'Teclado', 'Backing Vocal') */
   skills: string[]

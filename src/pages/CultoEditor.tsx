@@ -240,11 +240,11 @@ export function CultoEditorPage() {
     if (editing) {
       updateService(editing.id, payload)
       setSaved(true)
-      navigate(`/app/escalas/${editing.id}`)
+      navigate(`/app/escalas/${editing.id}`, { state: { compartilhar: true } })
     } else {
       const created = addService(payload)
       setSaved(true)
-      navigate(`/app/escalas/${created.id}`)
+      navigate(`/app/escalas/${created.id}`, { state: { compartilhar: true } })
     }
   }
 

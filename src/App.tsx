@@ -7,6 +7,7 @@ import { HomePage } from './pages/Home'
 import { EscalasPage } from './pages/Escalas'
 import { CultoEditorPage } from './pages/CultoEditor'
 import { EscalaDetalhePage } from './pages/EscalaDetalhe'
+import { EscalaPublicaPage } from './pages/EscalaPublica'
 import { MinhaEscalaPage } from './pages/MinhaEscala'
 import { EquipePage } from './pages/Equipe'
 import { PerfilPage } from './pages/Perfil'
@@ -31,6 +32,8 @@ function Shell() {
         path="/login"
         element={session && user ? <Navigate to="/app" replace /> : <LoginPage />}
       />
+      {/* Escala pública: é o link que o ministro manda no WhatsApp (sem login) */}
+      <Route path="/escala/:id" element={<EscalaPublicaPage />} />
       <Route
         path="/app"
         element={

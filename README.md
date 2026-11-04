@@ -11,8 +11,15 @@ Interface dark premium (grafite + neon de palco), pensada para leitura no escuro
 - **Dados compartilhados na nuvem**: escalas, equipe, repertório e presenças ficam salvos num
   Postgres (Neon) e chegam em **todos os aparelhos** (celular, tablet, notebook) em poucos
   segundos. O app continua funcionando sem internet e reenvia tudo quando a conexão volta.
-- **Login**: o e-mail precisa estar na lista demembers da equipe (a senha é livre — é só a porta
-  de entrada da UI; quem decide quem entra é a lista compartilhada).
+- **Login só dos ministros**: o e-mail precisa estar na lista de membros da equipe (a senha é
+  livre — é só a porta de entrada da UI; quem decide quem entra é a lista compartilhada).
+  **Integrantes sem e-mail não entram no app**: eles recebem o link da escala e só visualizam.
+- **Escala pública por link** (`/escala/:id`): página sem login onde a equipe digita o próprio
+  nome e vê "Sim! {nome} está na escala", a função, o repertório, o vídeo, a letra e a cifra.
+  É esse link que o ministro manda no grupo.
+- **Aviso no WhatsApp**: ao salvar a escala, o app monta uma mensagem **curta** (qual culto, o
+  local, o recado e o link) e abre o `wa.me` já com o texto escrito — é só tocar em enviar e
+  encaminhar para o grupo. A escala e o repertório ficam **dentro do link**, não na mensagem.
 - **Escalas**: criar, editar, duplicar e arquivar cultos com status (`rascunho`, `confirmado`, `realizado`).
 - **Divisão de equipe**: vagas separadas em *Instrumentistas* e *Vocais*, com a função de cada um
   (Teclado, Violão, Bateria, Guitarra, Ministro, Backing Vocal, Coral…).
@@ -23,7 +30,9 @@ Interface dark premium (grafite + neon de palco), pensada para leitura no escuro
   com janela arrastável (segure o cabeçalho), botão *Centralizar* e botão único que alterna
   entre **só a letra** e **letra com as cifras**.
 - **Equipe**: cadastro de integrantes, funções que cada pessoa pode executar, busca e filtro.
-- **Perfil**: dados cadastrais e troca de senha (simulada).
+  O **e-mail é opcional** — sem e-mail a pessoa só visualiza a escala pelo link.
+- **Perfil**: dados cadastrais, **meu WhatsApp** (é para ele que chega o aviso da escala) e
+  troca de senha (simulada).
 
 ## Stack
 
@@ -84,14 +93,14 @@ Localmente, use `vercel env pull .env.local --environment=production` (o arquivo
 ## Estrutura
 
 ```
-api/                # functions da Vercel (login + sync) e o acesso ao Postgres
+api/                # functions da Vercel (login + sync + escala pública) e o acesso ao Postgres
   _lib/             # regras da sincronização, token, conexão e helpers HTTP
 scripts/            # utilitários: seed do banco, API local de desenvolvimento
 src/
-  components/   # UI compartilhada (ui.tsx, AppShell, SongViewer, SyncStatus, Portal, Logo)
+  components/   # UI compartilhada (ui.tsx, AppShell, SongViewer, SyncStatus, Portal, Logo, WhatsappShare)
   hooks/        # useDraggable (janelas flutuantes arrastáveis)
-  lib/          # tipos, storage, seed, sincronização (sync.ts, syncState.ts) e parser de mídia
-  pages/        # Login, Home, Escalas, EscalaDetalhe, CultoEditor, MinhaEscala, Equipe, Perfil
+  lib/          # tipos, storage, seed, sincronização (sync.ts, syncState.ts), parser de mídia e whatsapp.ts
+  pages/        # Login, Home, Escalas, EscalaDetalhe, CultoEditor, EscalaPublica, MinhaEscala, Equipe, Perfil
   store/        # contextos de Auth e Data
 ```
 

@@ -167,6 +167,13 @@ export function LoginPage() {
             <span className="h-px flex-1 bg-white/8" />
           </div>
 
+          <div className="mb-5 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-xs leading-relaxed text-zinc-400">
+            <span className="font-semibold text-zinc-200">O acesso é só dos ministros.</span>{' '}
+            Os demais integrantes não precisam de e-mail nem de senha: o ministro manda no grupo
+            do WhatsApp o link da escala e cada um abre, digita o próprio nome e vê se está
+            escalado, com o vídeo, a letra e a cifra.
+          </div>
+
           <div className="space-y-2">
             {demoAccounts.map((account) => (
               <button

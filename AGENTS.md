@@ -36,6 +36,13 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
   selects e filtros de skills.
 - `src/components/ui.tsx` — `Button`, `Card`, `Field`, `Modal`, `Segmented`, etc.
 - `src/components/SongViewer.tsx` — player interno (vídeo em cima, letra/cifra embaixo).
+- `src/lib/whatsapp.ts` — monta a mensagem **curta** da escala (culto, local, recado e link) e o
+  link `wa.me`.
+- `src/components/WhatsappShare.tsx` — modal do aviso (preview, copiar, abrir no WhatsApp).
+- `src/pages/EscalaPublica.tsx` — página pública **sem login** (`/escala/:id`): busca pelo nome
+  + repertório com vídeo/letra/cifra.
+- `api/escala.ts` + `handlePublicScale` (`api/_lib/app.ts`) — endpoint público da escala (não
+  expõe e-mail, telefone nem presença).
 
 ## Regras que não dá para inferir do código
 
@@ -75,7 +82,14 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
 - **Não abrir o vídeo em outra aba** — pedido explícito do usuário: o player fica dentro do app.
 - Tailwind v4: cores customizadas via `@theme` em `src/index.css` (`ink-*`, `neon-*`); não
   criar arquivo de config do Tailwind.
-- Idioma da UI e dos comentários: **português do Brasil**.
+- **Idioma da UI e dos comentários: português do Brasil.**
+- **A mensagem do WhatsApp é curta de propósito** (pedido do usuário): só o culto, o local, o
+  recado (observações) e o link público. **Nunca** mandar a lista da equipe nem o repertório no
+  texto — a escala, o vídeo, a letra e a cifra ficam dentro do link, senão ninguém entra no app.
+- **Só os ministros fazem login.** Integrantes podem ficar sem e-mail (`Member.email` é
+  opcional) e visualizam pela página pública `/escala/:id`. Não exija e-mail para ver a escala.
+- **O endpoint público `/api/escala` não vaza dado pessoal**: devolve só equipe (nome, função),
+  repertório e observações — nunca e-mail, telefone ou presença.
 - Ao mexer no `api/`, use imports **com a extensão `.ts`** (o Node executa os scripts assim) e
   mantenha o `api/` livre de dependências do navegador.
 
