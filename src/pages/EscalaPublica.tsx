@@ -18,6 +18,7 @@ import { Badge, Button, Card, EmptyState, Input } from '../components/ui'
 import type { Category, ServiceSong } from '../lib/types'
 import { CATEGORY_LABEL, STATUS_LABEL } from '../lib/types'
 import { SOURCE_STYLE, describeMedia } from '../lib/mediaLinks'
+import { apiUrl } from '../lib/api'
 import { cn, formatDateLong, formatTime } from '../lib/utils'
 
 interface EquipeItem {
@@ -67,7 +68,7 @@ export function EscalaPublicaPage() {
   useEffect(() => {
     let cancelado = false
     setCarregando(true)
-    fetch(`/api/escala?id=${encodeURIComponent(id ?? '')}`)
+    fetch(apiUrl(`/api/escala?id=${encodeURIComponent(id ?? '')}`))
       .then(async (response) => {
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(data?.error ?? 'Não foi possível carregar a escala.')

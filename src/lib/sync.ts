@@ -15,6 +15,7 @@ import { useSyncExternalStore } from 'react'
 import type { AppData, SyncChange, SyncOp } from './syncState'
 import type { Member } from './types'
 import { normalizeData } from './syncState'
+import { apiUrl } from './api'
 
 export type SyncState =
   | 'desligado'
@@ -130,7 +131,7 @@ class SyncError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(apiUrl(`/api${path}`), {
     ...init,
     headers: {
       'Content-Type': 'application/json',

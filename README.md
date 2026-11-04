@@ -90,6 +90,40 @@ O app em produção usa as variáveis que a Vercel injeta ao conectar o Neon:
 
 Localmente, use `vercel env pull .env.local --environment=production` (o arquivo é ignorado pelo Git).
 
+### `VITE_API_URL` (opcional)
+
+Por padrão o app chama a API no **mesmo domínio** (`/api/...`). Só preencha quando o front roda em
+outro domínio — por exemplo o preview do Lovable (`*.lovable.app`):
+
+```
+VITE_API_URL=https://ministro-louvor.vercel.app
+```
+
+A API aceita CORS (não usa cookie, a sessão é token Bearer), então o preview do Lovable consegue
+falar com a Vercel normalmente.
+
+## Desenvolvendo no Lovable
+
+O projeto é **React + Vite + TypeScript + Tailwind 4**, exatamente a stack do Lovable. O caminho
+mais seguro é usar o Lovable como **editor do front** e manter o backend (functions da Vercel +
+Neon) onde está:
+
+1. **GitHub**: o código já está em `digiekeu-prog/ministro-louvor` (branch `main`).
+2. **Lovable**: *New project → Import from GitHub* (ou *Settings → GitHub → Connect repository*).
+   O Lovable clona o repo, detecta o Vite e instala as dependências.
+3. **Variável de ambiente**: no Lovable, em *Settings → Environment Variables*, crie
+   `VITE_API_URL` = `https://ministro-louvor.vercel.app` (e um *preview* da mesma, para o preview
+   do Lovable falar com a API de produção).
+4. **Rodar localmente**: `npm install && npm run dev` (o front em `localhost:5173` usa a API local
+   em `localhost:8787` pelo proxy do Vite).
+5. **Publicar**: o Lovable publica o front no hosting dele; a API continua na Vercel
+   (`https://ministro-louvor.vercel.app/api`). O `vercel.json` **não** pode reescrever `/api`.
+
+O que **não** funciona no Lovable: a pasta `api/` (functions da Vercel) — lá não existe runtime de
+functions. Se em algum momento quiser que o Lovable cuide também do backend, o caminho é migrar
+para Supabase (tabelas + edge functions) e reimplementar o log de operações; o app em si não
+precisa mudar, porque a sincronização conversa só com `/api/sync`.
+
 ## Estrutura
 
 ```

@@ -9,11 +9,13 @@
  */
 
 import { handlePublicScale } from './_lib/app.ts'
-import { fail, queryValue } from './_lib/http.ts'
+import { applyCors, fail, queryValue } from './_lib/http.ts'
 import type { ApiRequest, ApiResponse } from './_lib/http.ts'
 import { createPostgresStore } from './_lib/postgres.ts'
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
+  if (applyCors(req, res)) return
+
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Método não permitido.' })
     return

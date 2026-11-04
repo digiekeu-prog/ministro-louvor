@@ -4,11 +4,13 @@
  */
 
 import { handlePull, handlePush } from './_lib/app.ts'
-import { bearerToken, fail, queryValue, readBody } from './_lib/http.ts'
+import { applyCors, bearerToken, fail, queryValue, readBody } from './_lib/http.ts'
 import type { ApiRequest, ApiResponse } from './_lib/http.ts'
 import { createPostgresStore } from './_lib/postgres.ts'
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
+  if (applyCors(req, res)) return
+
   const store = createPostgresStore()
   const token = bearerToken(req)
   res.setHeader('Cache-Control', 'no-store')

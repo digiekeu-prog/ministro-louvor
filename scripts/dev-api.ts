@@ -122,6 +122,21 @@ const servidor = createServer(async (req, res) => {
   res.setHeader('Content-Type', 'application/json')
   res.setHeader('Cache-Control', 'no-store')
 
+  // CORS: deixa outro domínio (ex.: preview do Lovable) falar com a API local
+  const origin = req.headers.origin
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204
+    res.end()
+    return
+  }
+
   try {
     if (url.pathname === '/api/login' && req.method === 'POST') {
       const result = await handleLogin(store, (await corpo(req)) as { email?: string } | null)
