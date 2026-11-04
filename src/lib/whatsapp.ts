@@ -14,8 +14,16 @@
 import type { Service } from './types'
 import { formatDateLong, formatTime, parseISODate } from './utils'
 
-/** Endereço do app — é por ele que o time entra e vê a escala. */
-export const APP_URL = 'https://ministro-louvor.vercel.app'
+/**
+ * Endereço do app — é por ele que o time entra e vê a escala.
+ *
+ * Por padrão é o deploy da Vercel. Se o front for publicado em outro lugar
+ * (ex.: no Lovable), aponte a variável `VITE_APP_URL` para o novo domínio —
+ * senão o link da mensagem continua levando para o endereço antigo.
+ */
+export const APP_URL = (
+  import.meta.env.VITE_APP_URL ?? 'https://ministro-louvor.vercel.app'
+).replace(/\/+$/, '')
 
 const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
 

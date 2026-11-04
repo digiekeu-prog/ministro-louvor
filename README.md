@@ -90,13 +90,15 @@ O app em produção usa as variáveis que a Vercel injeta ao conectar o Neon:
 
 Localmente, use `vercel env pull .env.local --environment=production` (o arquivo é ignorado pelo Git).
 
-### `VITE_API_URL` (opcional)
+### `VITE_API_URL` e `VITE_APP_URL` (opcionais)
 
-Por padrão o app chama a API no **mesmo domínio** (`/api/...`). Só preencha quando o front roda em
-outro domínio — por exemplo o preview do Lovable (`*.lovable.app`):
+Por padrão o app chama a API no **mesmo domínio** (`/api/...`) e o link da mensagem do WhatsApp
+aponta para `https://ministro-louvor.vercel.app`. Só preencha quando o front roda/publica em outro
+domínio — por exemplo o preview do Lovable (`*.lovable.app`):
 
 ```
-VITE_API_URL=https://ministro-louvor.vercel.app
+VITE_API_URL=https://ministro-louvor.vercel.app   # onde está a API
+VITE_APP_URL=https://seu-app.lovable.app           # link da escala na mensagem
 ```
 
 A API aceita CORS (não usa cookie, a sessão é token Bearer), então o preview do Lovable consegue
@@ -113,7 +115,8 @@ Neon) onde está:
    O Lovable clona o repo, detecta o Vite e instala as dependências.
 3. **Variável de ambiente**: no Lovable, em *Settings → Environment Variables*, crie
    `VITE_API_URL` = `https://ministro-louvor.vercel.app` (e um *preview* da mesma, para o preview
-   do Lovable falar com a API de produção).
+   do Lovable falar com a API de produção). Se for publicar no Lovable, crie também
+   `VITE_APP_URL` com o novo domínio — é o link que vai na mensagem do WhatsApp.
 4. **Rodar localmente**: `npm install && npm run dev` (o front em `localhost:5173` usa a API local
    em `localhost:8787` pelo proxy do Vite).
 5. **Publicar**: o Lovable publica o front no hosting dele; a API continua na Vercel
