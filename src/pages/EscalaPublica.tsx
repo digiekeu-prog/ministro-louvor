@@ -283,7 +283,7 @@ export function EscalaPublicaPage() {
                 <UserRound size={17} />
               </span>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-white">Sim, {achou.nome} está escalado!</p>
+                <p className="text-sm font-semibold text-white">Sim! {achou.nome} está na escala.</p>
                 <p className="text-xs text-emerald-200/80">
                   Sua função: {achou.funcao}
                   {achou.observacao ? ` · ${achou.observacao}` : ''}
