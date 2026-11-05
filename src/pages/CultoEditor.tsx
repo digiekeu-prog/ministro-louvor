@@ -13,6 +13,7 @@ import {
   Music2,
   Plus,
   Save,
+  SlidersHorizontal,
   Trash2,
   UserRound,
   Users,
@@ -26,6 +27,7 @@ import {
   CATEGORY_SINGULAR,
   INSTRUMENT_FUNCTIONS,
   STATUS_LABEL,
+  TECHNICAL_FUNCTIONS,
   VOCAL_FUNCTIONS,
 } from '../lib/types'
 import { SOURCE_STYLE, describeMedia } from '../lib/mediaLinks'
@@ -43,12 +45,31 @@ const CATEGORY_ACCENT: Record<Category, { chip: string; text: string; ring: stri
     text: 'text-neon-purple',
     ring: 'focus-within:ring-neon-purple/20 focus-within:border-neon-purple/40',
   },
+  tecnica: {
+    chip: 'bg-neon-gold/12 text-neon-gold ring-neon-gold/25',
+    text: 'text-neon-gold',
+    ring: 'focus-within:ring-neon-gold/20 focus-within:border-neon-gold/40',
+  },
 }
 
+/** Ordem das abas de vagas no editor. */
+const CATEGORIAS: Category[] = ['instrumentista', 'vocal', 'tecnica']
+
 function defaultSlots(category: Category): Slot[] {
-  const list = category === 'instrumentista' ? INSTRUMENT_FUNCTIONS : VOCAL_FUNCTIONS
+  const list =
+    category === 'instrumentista'
+      ? INSTRUMENT_FUNCTIONS
+      : category === 'vocal'
+        ? VOCAL_FUNCTIONS
+        : TECHNICAL_FUNCTIONS
   const defaults = category === 'instrumentista' ? list.slice(0, 5) : list.slice(0, 2)
   return defaults.map((functionName) => ({ id: uid('slot'), category, functionName }))
+}
+
+/** Próxima categoria (usada no botão "mover para…"). */
+function proximaCategoria(category: Category): Category {
+  const indice = CATEGORIAS.indexOf(category)
+  return CATEGORIAS[(indice + 1) % CATEGORIAS.length]
 }
 
 export function CultoEditorPage() {
@@ -63,7 +84,13 @@ export function CultoEditorPage() {
   const [location, setLocation] = useState(editing?.location ?? '')
   const [status, setStatus] = useState<ServiceStatus>(editing?.status ?? 'rascunho')
   const [notes, setNotes] = useState(editing?.notes ?? '')
-  const [slots, setSlots] = useState<Slot[]>(editing?.slots ?? [...defaultSlots('instrumentista'), ...defaultSlots('vocal')])
+  const [slots, setSlots] = useState<Slot[]>(
+    editing?.slots ?? [
+      ...defaultSlots('instrumentista'),
+      ...defaultSlots('vocal'),
+      ...defaultSlots('tecnica'),
+    ],
+  )
   const [activeCategory, setActiveCategory] = useState<Category>('instrumentista')
   const [selectedSongs, setSelectedSongs] = useState<ServiceSong[]>(editing?.songs ?? [])
   const [saved, setSaved] = useState(false)
@@ -88,7 +115,8 @@ export function CultoEditorPage() {
   function eligibleMembers(category: Category) {
     return activeMembers.filter((m) => {
       if (category === 'instrumentista') return m.category === 'instrumentista' || m.category === 'admin'
-      return m.category === 'vocal' || m.category === 'admin'
+      if (category === 'vocal') return m.category === 'vocal' || m.category === 'admin'
+      return m.category === 'tecnica' || m.category === 'admin'
     })
   }
 
@@ -102,18 +130,6 @@ export function CultoEditorPage() {
       map.set(slot.memberId, list)
     })
     return map
-  }, [slots])
-
-  const duplicates = useMemo(() => {
-    const seen = new Map<string, number>()
-    const dupes = new Set<string>()
-    slots.forEach((slot) => {
-      if (!slot.memberId) return
-      const count = (seen.get(slot.memberId) ?? 0) + 1
-      seen.set(slot.memberId, count)
-      if (count > 1) dupes.add(slot.memberId)
-    })
-    return dupes
   }, [slots])
 
   const categorySlots = slots.filter((s) => s.category === activeCategory)
@@ -215,8 +231,9 @@ export function CultoEditorPage() {
     const validation: string[] = []
     if (!title.trim()) validation.push('Informe o nome do culto.')
     if (!date) validation.push('Informe a data do culto.')
-    if (duplicates.size > 0)
-      validation.push('Há integrantes escalados em mais de uma função. Revise a divisão.')
+
+    // Uma pessoa pode estar em mais de uma função (toca e canta ao mesmo
+    // tempo, por exemplo) — isso é permitido e não impede o salvamento.
 
     setErrors(validation)
     if (validation.length) {
@@ -256,7 +273,12 @@ export function CultoEditorPage() {
     }
   }
 
-  const functionOptions = activeCategory === 'instrumentista' ? INSTRUMENT_FUNCTIONS : VOCAL_FUNCTIONS
+  const functionOptions =
+    activeCategory === 'instrumentista'
+      ? INSTRUMENT_FUNCTIONS
+      : activeCategory === 'vocal'
+        ? VOCAL_FUNCTIONS
+        : TECHNICAL_FUNCTIONS
 
   return (
     <div className="pb-24">
@@ -415,6 +437,11 @@ export function CultoEditorPage() {
                     label: `Vocais (${slots.filter((s) => s.category === 'vocal').length})`,
                     icon: <Users size={15} />,
                   },
+                  {
+                    value: 'tecnica',
+                    label: `Técnica (${slots.filter((s) => s.category === 'tecnica').length})`,
+                    icon: <SlidersHorizontal size={15} />,
+                  },
                 ]}
               />
             </div>
@@ -435,7 +462,6 @@ export function CultoEditorPage() {
                     const member = members.find((m) => m.id === slot.memberId)
                     const eligible = eligibleMembers(slot.category)
                     const otherFunctions = assignedElsewhere.get(slot.memberId ?? '') ?? []
-                    const isDuplicate = slot.memberId ? duplicates.has(slot.memberId) : false
                     const accent = CATEGORY_ACCENT[slot.category]
 
                     return (
@@ -444,7 +470,6 @@ export function CultoEditorPage() {
                         className={cn(
                           'group rounded-2xl border border-white/8 bg-ink-900/60 p-3.5 transition-all focus-within:ring-2',
                           accent.ring,
-                          isDuplicate && 'border-red-500/40 bg-red-500/5',
                         )}
                       >
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -533,8 +558,9 @@ export function CultoEditorPage() {
                               />
                             </div>
                             {member && otherFunctions.length > 1 && (
-                              <p className="mt-1.5 flex items-center gap-1.5 text-[0.68rem] text-red-400">
-                                <CircleAlert size={12} /> Escalar em mais de uma função
+                              <p className="mt-1.5 flex items-center gap-1.5 text-[0.68rem] text-zinc-500">
+                                <CircleAlert size={12} /> Também está em:{' '}
+                                {otherFunctions.filter((f) => f !== slot.functionName).join(', ')}
                               </p>
                             )}
                           </div>
@@ -542,7 +568,7 @@ export function CultoEditorPage() {
                           {/* Ações */}
                           <div className="flex items-center gap-1 sm:flex-col">
                             {member && (
-                              <Avatar name={member.name} hue={member.hue} size={38} ring={!isDuplicate} />
+                              <Avatar name={member.name} hue={member.hue} size={38} />
                             )}
                             <button
                               type="button"
@@ -578,14 +604,14 @@ export function CultoEditorPage() {
                   onClick={() =>
                     moveSlot(
                       categorySlots[0]?.id ?? '',
-                      activeCategory === 'instrumentista' ? 'vocal' : 'instrumentista',
+                      proximaCategoria(activeCategory),
                     )
                   }
                   disabled={categorySlots.length === 0}
                   type="button"
                   title="Move a primeira vaga para a outra categoria"
                 >
-                  Mover primeira para {activeCategory === 'instrumentista' ? 'Vocais' : 'Instrumentistas'}
+                  Mover primeira para {CATEGORY_LABEL[proximaCategoria(activeCategory)]}
                 </Button>
               </div>
             </div>
@@ -836,6 +862,13 @@ export function CultoEditorPage() {
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
+                <dt className="text-zinc-500">Equipe técnica</dt>
+                <dd className="font-medium text-zinc-200">
+                  {slots.filter((s) => s.category === 'tecnica' && s.memberId).length}/
+                  {slots.filter((s) => s.category === 'tecnica').length}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
                 <dt className="text-zinc-500">Integrantes únicos</dt>
                 <dd className="font-medium text-zinc-200">
                   {new Set(slots.filter((s) => s.memberId).map((s) => s.memberId)).size}
@@ -879,7 +912,9 @@ export function CultoEditorPage() {
                           ? 'Ministro'
                           : member.category === 'vocal'
                             ? 'Vocal'
-                            : 'Instrumentista'}
+                            : member.category === 'tecnica'
+                              ? 'Técnico'
+                              : 'Instrumentista'}
                       </p>
                     </div>
                     {assigned ? (

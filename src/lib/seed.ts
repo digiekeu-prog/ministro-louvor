@@ -112,6 +112,18 @@ export const seedMembers: Member[] = [
     active: false,
     notes: 'Em hiatus até o mês que vem.',
   },
+  {
+    id: 'mem_rafael',
+    name: 'Rafael Nunes',
+    // Equipe técnica: sem e-mail — só visualiza a escala pelo link público.
+    email: '',
+    phone: '(11) 98888-4421',
+    category: 'tecnica',
+    skills: ['Mesa de som', 'Projeção'],
+    hue: 48,
+    active: true,
+    notes: 'Opera a mesa de som e a projeção.',
+  },
 ]
 
 const now = new Date().toISOString()
@@ -279,6 +291,8 @@ export const seedServices: Service[] = [
       { id: 's7', category: 'instrumentista', functionName: 'Baixo', memberId: 'mem_marcos' },
       { id: 's8', category: 'instrumentista', functionName: 'Guitarra', memberId: 'mem_joao' },
       { id: 's9', category: 'instrumentista', functionName: 'Bateria', memberId: 'mem_thiago' },
+      { id: 's1t', category: 'tecnica', functionName: 'Mesa de som', memberId: 'mem_rafael' },
+      { id: 's2t', category: 'tecnica', functionName: 'Projeção' },
     ],
   },
   {

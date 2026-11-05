@@ -12,6 +12,7 @@ import {
   Music2,
   Pencil,
   Play,
+  SlidersHorizontal,
   ThumbsUp,
   Users,
 } from 'lucide-react'
@@ -55,8 +56,9 @@ export function EscalaDetalhePage() {
     )
   }
 
-  const categories: Category[] = ['instrumentista', 'vocal']
-  const mySlot = service.slots.find((slot) => slot.memberId === user?.id)
+  const categories: Category[] = ['instrumentista', 'vocal', 'tecnica']
+  const mySlots = service.slots.filter((slot) => slot.memberId === user?.id)
+  const mySlot = mySlots[0]
   const confirmed = user ? isConfirmed(user.id, service.id) : false
 
   return (
@@ -135,13 +137,17 @@ export function EscalaDetalhePage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-neon-cyan">
-                Sua função neste culto
+                {mySlots.length > 1 ? 'Suas funções neste culto' : 'Sua função neste culto'}
               </p>
               <p className="font-display text-3xl font-extrabold text-white sm:text-4xl">
-                {mySlot.functionName}
+                {mySlots.map((slot) => slot.functionName).join(' · ')}
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Badge tone="cyan">{CATEGORY_SINGULAR[mySlot.category]}</Badge>
+                {mySlots.map((slot) => (
+                  <Badge key={slot.id} tone="cyan">
+                    {CATEGORY_SINGULAR[slot.category]}
+                  </Badge>
+                ))}
                 {confirmed && <Badge tone="green">Presença confirmada</Badge>}
               </div>
               {mySlot.notes && (
@@ -167,12 +173,22 @@ export function EscalaDetalhePage() {
                 <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-white">
                   {category === 'instrumentista' ? (
                     <Music2 size={18} className="text-neon-cyan" />
-                  ) : (
+                  ) : category === 'vocal' ? (
                     <Users size={18} className="text-neon-purple" />
+                  ) : (
+                    <SlidersHorizontal size={18} className="text-neon-gold" />
                   )}
                   {CATEGORY_LABEL[category]}
                 </h2>
-                <Badge tone={category === 'instrumentista' ? 'cyan' : 'purple'}>
+                <Badge
+                  tone={
+                    category === 'instrumentista'
+                      ? 'cyan'
+                      : category === 'vocal'
+                        ? 'purple'
+                        : 'gold'
+                  }
+                >
                   {filled.length}/{slots.length}
                 </Badge>
               </div>
@@ -217,7 +233,9 @@ export function EscalaDetalhePage() {
                               member
                                 ? category === 'instrumentista'
                                   ? 'text-neon-cyan/90'
-                                  : 'text-neon-purple/90'
+                                  : category === 'vocal'
+                                    ? 'text-neon-purple/90'
+                                    : 'text-neon-gold/90'
                                 : 'text-zinc-600'
                             }`}
                           >

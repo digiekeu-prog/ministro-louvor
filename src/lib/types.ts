@@ -1,4 +1,4 @@
-export type Category = 'instrumentista' | 'vocal'
+export type Category = 'instrumentista' | 'vocal' | 'tecnica'
 
 export type MemberCategory = Category | 'admin'
 
@@ -100,14 +100,28 @@ export const VOCAL_FUNCTIONS = [
   'Respaldo',
 ] as const
 
+/**
+ * Funções da equipe técnica (mesa de som, projeção…).
+ * Essas pessoas entram na escala como qualquer outra, mas **não precisam de
+ * e-mail nem de login**: elas só visualizam a escala pelo link público.
+ */
+export const TECHNICAL_FUNCTIONS = [
+  'Mesa de som',
+  'Projeção',
+  'Projeção de letras',
+  'Tecnologia',
+] as const
+
 export const CATEGORY_LABEL: Record<Category, string> = {
   instrumentista: 'Instrumentistas',
   vocal: 'Vocais',
+  tecnica: 'Equipe técnica',
 }
 
 export const CATEGORY_SINGULAR: Record<Category, string> = {
   instrumentista: 'Instrumentista',
   vocal: 'Vocal',
+  tecnica: 'Técnico',
 }
 
 export const STATUS_LABEL: Record<ServiceStatus, string> = {

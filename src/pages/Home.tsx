@@ -14,7 +14,7 @@ import { Greeting } from '../components/AppShell'
 import { Avatar, Badge, Button, Card, EmptyState } from '../components/ui'
 import { useAuth } from '../store/AuthContext'
 import { useData } from '../store/DataContext'
-import { CATEGORY_SINGULAR, STATUS_LABEL } from '../lib/types'
+import { CATEGORY_LABEL, CATEGORY_SINGULAR, STATUS_LABEL } from '../lib/types'
 import { formatDateLong, formatTime, relativeDay } from '../lib/utils'
 
 export function HomePage() {
@@ -152,12 +152,13 @@ export function HomePage() {
 
                 {/* Mini equipe */}
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {(['instrumentista', 'vocal'] as const).map((category) => {
+                  {(['instrumentista', 'vocal', 'tecnica'] as const).map((category) => {
                     const slots = nextService.slots.filter((s) => s.category === category)
+                    if (slots.length === 0) return null
                     return (
                       <div key={category} className="rounded-2xl border border-white/8 bg-white/2 p-4">
                         <p className="mb-3 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                          {category === 'instrumentista' ? 'Instrumentistas' : 'Vocais'}
+                          {CATEGORY_LABEL[category]}
                           <span className="ml-2 text-zinc-600">({slots.length})</span>
                         </p>
                         <div className="flex flex-wrap gap-2">

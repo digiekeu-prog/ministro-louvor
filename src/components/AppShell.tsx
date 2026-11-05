@@ -93,7 +93,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">{user?.name}</p>
               <p className="text-[0.7rem] uppercase tracking-[0.14em] text-zinc-500">
-                {isAdmin ? 'Ministro' : user?.category === 'vocal' ? 'Vocal' : 'Instrumentista'}
+                {isAdmin
+                  ? 'Ministro'
+                  : user?.category === 'vocal'
+                    ? 'Vocal'
+                    : user?.category === 'tecnica'
+                      ? 'Equipe técnica'
+                      : 'Instrumentista'}
               </p>
             </div>
           </div>

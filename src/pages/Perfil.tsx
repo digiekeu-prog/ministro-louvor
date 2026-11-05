@@ -76,13 +76,29 @@ export function PerfilPage() {
                 <h2 className="font-display text-xl font-bold text-white">{user.name}</h2>
                 <p className="text-sm text-zinc-400">{user.email}</p>
                 <div className="mt-2 flex flex-wrap justify-center gap-2 sm:justify-start">
-                  <Badge tone={isAdmin ? 'gold' : user.category === 'vocal' ? 'purple' : 'cyan'}>
+                  <Badge
+                    tone={
+                      isAdmin
+                        ? 'gold'
+                        : user.category === 'vocal'
+                          ? 'purple'
+                          : user.category === 'tecnica'
+                            ? 'gold'
+                            : 'cyan'
+                    }
+                  >
                     {isAdmin ? (
                       <>
                         <ShieldCheck size={11} /> Ministro
                       </>
                     ) : (
-                      CATEGORY_SINGULAR[user.category === 'vocal' ? 'vocal' : 'instrumentista']
+                      CATEGORY_SINGULAR[
+                        user.category === 'vocal'
+                          ? 'vocal'
+                          : user.category === 'tecnica'
+                            ? 'tecnica'
+                            : 'instrumentista'
+                      ]
                     )}
                   </Badge>
                   {user.skills.map((skill) => (

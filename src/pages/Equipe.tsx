@@ -1,14 +1,19 @@
 import { useMemo, useState } from 'react'
-import { Music2, Pencil, Plus, Search, Trash2, Upload, UserPlus, Users } from 'lucide-react'
+import { Music2, Pencil, Plus, Search, SlidersHorizontal, Trash2, Upload, UserPlus, Users } from 'lucide-react'
 import { PageTitle } from '../components/AppShell'
 import { SyncBadge } from '../components/SyncStatus'
 import { Avatar, Badge, Button, Card, EmptyState, Field, Input, Modal, Segmented, Select } from '../components/ui'
 import { useData } from '../store/DataContext'
 import type { Member, MemberCategory } from '../lib/types'
-import { CATEGORY_SINGULAR, INSTRUMENT_FUNCTIONS, VOCAL_FUNCTIONS } from '../lib/types'
+import {
+  CATEGORY_SINGULAR,
+  INSTRUMENT_FUNCTIONS,
+  TECHNICAL_FUNCTIONS,
+  VOCAL_FUNCTIONS,
+} from '../lib/types'
 import { cn } from '../lib/utils'
 
-type Filter = 'todos' | 'instrumentista' | 'vocal' | 'admin'
+type Filter = 'todos' | 'instrumentista' | 'vocal' | 'tecnica' | 'admin'
 
 const EMPTY_FORM = {
   name: '',
@@ -28,7 +33,11 @@ export function EquipePage() {
   const [form, setForm] = useState(EMPTY_FORM)
 
   const availableFunctions =
-    form.category === 'instrumentista' ? INSTRUMENT_FUNCTIONS : VOCAL_FUNCTIONS
+    form.category === 'instrumentista'
+      ? INSTRUMENT_FUNCTIONS
+      : form.category === 'vocal'
+        ? VOCAL_FUNCTIONS
+        : TECHNICAL_FUNCTIONS
 
   const filtered = useMemo(
     () =>
@@ -75,7 +84,13 @@ export function EquipePage() {
       category: form.category,
       skills: form.skills.length
         ? form.skills
-        : [form.category === 'instrumentista' ? INSTRUMENT_FUNCTIONS[0] : VOCAL_FUNCTIONS[0]],
+        : [
+            form.category === 'instrumentista'
+              ? INSTRUMENT_FUNCTIONS[0]
+              : form.category === 'vocal'
+                ? VOCAL_FUNCTIONS[0]
+                : TECHNICAL_FUNCTIONS[0],
+          ],
       notes: form.notes.trim() || undefined,
       hue: editingId
         ? (members.find((m) => m.id === editingId)?.hue ?? 200)
@@ -156,6 +171,11 @@ export function EquipePage() {
               label: `Vocais (${members.filter((m) => m.category === 'vocal').length})`,
               icon: <Users size={14} />,
             },
+            {
+              value: 'tecnica',
+              label: `Técnica (${members.filter((m) => m.category === 'tecnica').length})`,
+              icon: <SlidersHorizontal size={14} />,
+            },
             { value: 'admin', label: 'Ministros' },
           ]}
         />
@@ -207,7 +227,9 @@ export function EquipePage() {
                           ? 'gold'
                           : member.category === 'vocal'
                             ? 'purple'
-                            : 'cyan'
+                            : member.category === 'tecnica'
+                              ? 'gold'
+                              : 'cyan'
                       }
                     >
                       {member.category === 'admin'
@@ -314,13 +336,16 @@ export function EquipePage() {
                       ? true
                       : category === 'instrumentista'
                         ? (INSTRUMENT_FUNCTIONS as readonly string[]).includes(s)
-                        : (VOCAL_FUNCTIONS as readonly string[]).includes(s),
+                        : category === 'vocal'
+                          ? (VOCAL_FUNCTIONS as readonly string[]).includes(s)
+                          : (TECHNICAL_FUNCTIONS as readonly string[]).includes(s),
                   ),
                 }))
               }}
             >
               <option value="instrumentista">Instrumentista</option>
               <option value="vocal">Vocal</option>
+              <option value="tecnica">Equipe técnica (mesa de som, projeção…)</option>
               <option value="admin">Ministro / Líder</option>
             </Select>
           </Field>
@@ -330,12 +355,14 @@ export function EquipePage() {
             hint={
               form.category === 'admin'
                 ? 'Ministros podem actuar em qualquer função.'
-                : 'Marque tudo que a pessoa toca ou canta.'
+                : form.category === 'tecnica'
+                  ? 'Marque tudo que a pessoa opera (mesa de som, projeção…).'
+                  : 'Marque tudo que a pessoa toca ou canta.'
             }
           >
             <div className="flex flex-wrap gap-2">
               {(form.category === 'admin'
-                ? [...INSTRUMENT_FUNCTIONS, ...VOCAL_FUNCTIONS]
+                ? [...INSTRUMENT_FUNCTIONS, ...VOCAL_FUNCTIONS, ...TECHNICAL_FUNCTIONS]
                 : availableFunctions
               ).map((option) => {
                 const active = form.skills.includes(option)

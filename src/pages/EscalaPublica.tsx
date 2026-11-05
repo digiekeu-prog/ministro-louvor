@@ -10,6 +10,7 @@ import {
   Play,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   UserRound,
   Users,
 } from 'lucide-react'
@@ -148,9 +149,13 @@ export function EscalaPublicaPage() {
     )
   }, [escala, termo])
 
+  /** Todas as funções da pessoa encontrada (ela pode tocar e cantar, por exemplo). */
   const achou = useMemo(() => {
     if (!termo || !escala) return null
-    return escala.equipe.find((item) => item.nome.toLowerCase().includes(termo)) ?? null
+    const encontrados = escala.equipe.filter((item) =>
+      item.nome.toLowerCase().includes(termo),
+    )
+    return encontrados.length ? encontrados : null
   }, [escala, termo])
 
   if (erro) {
@@ -178,7 +183,7 @@ export function EscalaPublicaPage() {
     )
   }
 
-  const categorias: Category[] = ['instrumentista', 'vocal']
+  const categorias: Category[] = ['instrumentista', 'vocal', 'tecnica']
 
   return (
     <div className="min-h-dvh pb-16">
@@ -283,10 +288,13 @@ export function EscalaPublicaPage() {
                 <UserRound size={17} />
               </span>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-white">Sim! {achou.nome} está na escala.</p>
+                <p className="text-sm font-semibold text-white">
+                  Sim! {achou[0].nome} está na escala.
+                </p>
                 <p className="text-xs text-emerald-200/80">
-                  Sua função: {achou.funcao}
-                  {achou.observacao ? ` · ${achou.observacao}` : ''}
+                  {achou.length > 1 ? 'Suas funções: ' : 'Sua função: '}
+                  {achou.map((item) => item.funcao).join(', ')}
+                  {achou[0].observacao ? ` · ${achou[0].observacao}` : ''}
                 </p>
               </div>
             </div>
@@ -310,12 +318,22 @@ export function EscalaPublicaPage() {
                   <h2 className="flex items-center gap-2 font-display text-base font-semibold text-white">
                     {categoria === 'instrumentista' ? (
                       <Music2 size={17} className="text-neon-cyan" />
-                    ) : (
+                    ) : categoria === 'vocal' ? (
                       <Users size={17} className="text-neon-purple" />
+                    ) : (
+                      <SlidersHorizontal size={17} className="text-neon-gold" />
                     )}
                     {CATEGORY_LABEL[categoria]}
                   </h2>
-                  <Badge tone={categoria === 'instrumentista' ? 'cyan' : 'purple'}>
+                  <Badge
+                    tone={
+                      categoria === 'instrumentista'
+                        ? 'cyan'
+                        : categoria === 'vocal'
+                          ? 'purple'
+                          : 'gold'
+                    }
+                  >
                     {itens.length}
                   </Badge>
                 </div>
@@ -341,7 +359,9 @@ export function EscalaPublicaPage() {
                             'grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold ring-1',
                             item.categoria === 'instrumentista'
                               ? 'bg-neon-cyan/12 text-neon-cyan ring-neon-cyan/25'
-                              : 'bg-neon-purple/12 text-neon-purple ring-neon-purple/25',
+                              : item.categoria === 'vocal'
+                                ? 'bg-neon-purple/12 text-neon-purple ring-neon-purple/25'
+                                : 'bg-neon-gold/12 text-neon-gold ring-neon-gold/25',
                           )}
                         >
                           {item.nome.slice(0, 1).toUpperCase()}
