@@ -9,6 +9,7 @@
 
 import { neon } from '@neondatabase/serverless'
 import type { NeonQueryFunction } from '@neondatabase/serverless'
+import type { AudioMeta, AudioStore } from './audio.ts'
 
 /** Cliente do Neon (modo linhas, sem resultados completos). */
 type Sql = NeonQueryFunction<false, false>
@@ -88,6 +89,104 @@ export async function ensureSchema(sql: Sql): Promise<void> {
       value text not null
     )
   `
+}
+
+/* ------------------------------- áudios (MP3) ------------------------------- */
+
+let audioSchemaReady = false
+
+/**
+ * Tabelas dos MP3 do repertório.
+ *
+ * O arquivo fica em `wf_audio` (bytea) e as partes do upload em
+ * `wf_audio_chunk` (são apagadas assim que o arquivo é montado).
+ */
+export async function ensureAudioSchema(sql: Sql): Promise<void> {
+  if (audioSchemaReady) return
+  await sql`
+    create table if not exists wf_audio (
+      id text primary key,
+      nome text not null,
+      mime text not null,
+      tamanho bigint not null,
+      dados bytea not null,
+      criado_em timestamptz not null default now()
+    )
+  `
+  await sql`
+    create table if not exists wf_audio_chunk (
+      upload_id text not null,
+      parte integer not null,
+      dados bytea not null,
+      primary key (upload_id, parte)
+    )
+  `
+  audioSchemaReady = true
+}
+
+/** Converte um Buffer no formato que o Postgres entende para `bytea`. */
+function toBytea(bytes: Buffer): string {
+  return `\\x${bytes.toString('hex')}`
+}
+
+/** Guardador de MP3 usando o Postgres do Neon. */
+export function createPostgresAudioStore(): AudioStore {
+  return {
+    async saveChunk(uploadId: string, parte: number, bytes: Buffer) {
+      await ensureAudioSchema(getSql())
+      await getSql()`
+        insert into wf_audio_chunk (upload_id, parte, dados)
+        values (${uploadId}, ${parte}, ${toBytea(bytes)})
+        on conflict (upload_id, parte) do update set dados = excluded.dados
+      `
+    },
+    async readChunks(uploadId: string, total: number) {
+      await ensureAudioSchema(getSql())
+      const rows = (await getSql()`
+        select dados from wf_audio_chunk
+        where upload_id = ${uploadId} and parte < ${total}
+        order by parte asc
+      `) as { dados: Buffer }[]
+      return rows.map((row) => row.dados)
+    },
+    async clearChunks(uploadId: string) {
+      await ensureAudioSchema(getSql())
+      await getSql()`delete from wf_audio_chunk where upload_id = ${uploadId}`
+    },
+    async save(meta: AudioMeta, bytes: Buffer) {
+      await ensureAudioSchema(getSql())
+      await getSql()`
+        insert into wf_audio (id, nome, mime, tamanho, dados)
+        values (${meta.id}, ${meta.nome}, ${meta.mime}, ${meta.tamanho}, ${toBytea(bytes)})
+        on conflict (id) do update
+          set nome = excluded.nome,
+              mime = excluded.mime,
+              tamanho = excluded.tamanho,
+              dados = excluded.dados
+      `
+    },
+    async read(id: string) {
+      await ensureAudioSchema(getSql())
+      const rows = (await getSql()`
+        select nome, mime, tamanho, dados from wf_audio where id = ${id} limit 1
+      `) as { nome: string; mime: string; tamanho: number | string; dados: Buffer }[]
+      const row = rows[0]
+      if (!row) return null
+      return {
+        meta: {
+          id,
+          nome: row.nome,
+          mime: row.mime,
+          tamanho: Number(row.tamanho),
+        },
+        bytes: row.dados,
+      }
+    },
+    async remove(id: string) {
+      await ensureAudioSchema(getSql())
+      await getSql()`delete from wf_audio where id = ${id}`
+    },
+  }
 }
 
 /** Lê o log inteiro (usado para reconstruir o estado e validar o login). */

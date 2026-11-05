@@ -49,6 +49,15 @@ export interface ServiceSong {
   key?: string
   bpm?: number
   notes?: string
+  /**
+   * Áudio MP3 enviado pelo ministro: só o `id` viaja na sincronização — o
+   * arquivo fica guardado no servidor e é tocado pelo player do app.
+   */
+  audioId?: string
+  /** Nome do arquivo enviado (ex.: 'celebrai-a-cristo.mp3'). */
+  audioName?: string
+  /** Tamanho do arquivo, em bytes. */
+  audioSize?: number
 }
 
 export interface Service {

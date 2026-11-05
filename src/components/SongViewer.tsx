@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
+  FileAudio,
   FileText,
   Guitar,
   Info,
@@ -16,6 +17,7 @@ import {
 import type { ServiceSong } from '../lib/types'
 import { SOURCE_STYLE, describeMedia } from '../lib/mediaLinks'
 import { stripChordLines } from '../lib/chordSheet'
+import { audioUrl } from '../lib/audio'
 import { Badge, IconButton } from './ui'
 import { Portal } from './Portal'
 import { cn } from '../lib/utils'
@@ -50,6 +52,8 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [lastSongId, setLastSongId] = useState(song?.id)
+  /** 'audio' = MP3 enviado pelo ministro; 'video' = link do YouTube. */
+  const [modoMidia, setModoMidia] = useState<'audio' | 'video'>('audio')
   const scrollRef = useRef<HTMLDivElement>(null)
   const { panelRef, offset, dragging, handlePointerDown, reset } = useDraggable(open)
 
@@ -58,6 +62,7 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
     setLastSongId(song.id)
     setTab(song.lyrics?.trim() ? 'letra' : 'cifra')
     setPlaying(false)
+    setModoMidia(song.audioId ? 'audio' : 'video')
   }
 
   /** Rola a letra/cifra automaticamente, do topo ao fim. */
@@ -141,6 +146,8 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
 
   const hasLyrics = Boolean(song.lyrics?.trim())
   const hasChords = Boolean(song.chords?.trim())
+  /** O ministro enviou um MP3 para esta música? */
+  const temAudio = Boolean(song.audioId)
   const style = media ? SOURCE_STYLE[media.source] : null
   const hasSheet = Boolean(sheet.trim())
   /** Posição da velocidade atual na lista (para os botões − e +). */
@@ -193,6 +200,11 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
                   )}
                   {song.key && <Badge tone="gold">Tom {song.key}</Badge>}
                   {song.bpm && <Badge tone="cyan">{song.bpm} BPM</Badge>}
+                  {temAudio && (
+                    <span className="rounded-full bg-emerald-400/12 px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-emerald-300 ring-1 ring-emerald-400/25">
+                      MP3
+                    </span>
+                  )}
                   {song.progression && (
                     <span className="rounded-full bg-neon-purple/12 px-2 py-0.5 font-mono text-[0.62rem] font-semibold text-neon-purple ring-1 ring-neon-purple/25">
                       {song.progression}
@@ -222,9 +234,33 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
               </div>
             </div>
 
-            {/* Vídeo no topo */}
+            {/* Vídeo / áudio no topo */}
             <div className="shrink-0 border-b border-white/8 px-3 py-2.5 sm:px-4">
-              {embedSrc ? (
+              {temAudio && modoMidia === 'audio' ? (
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-3.5 py-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <FileAudio size={15} className="shrink-0 text-emerald-300" />
+                    <p className="min-w-0 flex-1 truncate text-xs font-semibold text-zinc-200">
+                      {song.audioName ?? 'Áudio MP3'}
+                    </p>
+                    {embedSrc && (
+                      <button
+                        type="button"
+                        onClick={() => setModoMidia('video')}
+                        className="shrink-0 rounded-lg bg-white/6 px-2.5 py-1 text-[0.68rem] font-medium text-zinc-300 transition hover:bg-white/12 hover:text-white"
+                      >
+                        Ver vídeo
+                      </button>
+                    )}
+                  </div>
+                  <audio
+                    controls
+                    preload="metadata"
+                    src={audioUrl(song.audioId!)}
+                    className="h-10 w-full"
+                  />
+                </div>
+              ) : embedSrc ? (
                 <div className="space-y-2.5">
                   {openedByIp && (
                     <div className="flex items-start gap-2.5 rounded-xl border border-neon-gold/25 bg-neon-gold/8 px-3.5 py-2.5 text-xs text-neon-gold">
@@ -235,6 +271,15 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
                         para o vídeo tocar dentro do app.
                       </p>
                     </div>
+                  )}
+                  {temAudio && (
+                    <button
+                      type="button"
+                      onClick={() => setModoMidia('audio')}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-400/10 px-2.5 py-1 text-[0.68rem] font-medium text-emerald-300 transition hover:bg-emerald-400/20"
+                    >
+                      <FileAudio size={13} /> Ouvir o MP3
+                    </button>
                   )}
                   <div
                     className="relative mx-auto aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black"
@@ -270,11 +315,11 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
                   </span>
                   <div className="min-w-0">
                     <p className="font-display text-sm font-semibold text-white">
-                      Nenhum link de áudio cadastrado
+                      Nenhum áudio cadastrado
                     </p>
                     <p className="mt-0.5 text-xs text-zinc-400">
-                      O ministro pode adicionar um link de YouTube, Vimeo, Spotify ou outro
-                      endereço em “Editar escala”.
+                      O ministro pode enviar um MP3 ou adicionar um link de YouTube, Vimeo,
+                      Spotify ou outro endereço em “Editar escala”.
                     </p>
                   </div>
                 </div>

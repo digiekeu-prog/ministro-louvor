@@ -14,7 +14,8 @@ export interface ApiResponse {
   status(code: number): ApiResponse
   json(payload: unknown): void
   setHeader(name: string, value: string): void
-  end?: () => void
+  /** Encerra a resposta (pode enviar o corpo em Buffer, como no áudio). */
+  end?: (chunk?: unknown) => void
 }
 
 /** Lê o corpo da requisição (a Vercel já parseia JSON, mas há casos sem parse). */
@@ -72,7 +73,7 @@ export function applyCors(req: ApiRequest, res: ApiResponse): boolean {
     res.setHeader('Access-Control-Allow-Origin', origin)
     res.setHeader('Vary', 'Origin')
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization')
   res.setHeader('Access-Control-Max-Age', '86400')
 

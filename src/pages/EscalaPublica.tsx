@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   CalendarDays,
+  CheckCircle2,
+  CircleSlash,
   Clock,
+  FileAudio,
   FileText,
   Guitar,
   MapPin,
@@ -21,7 +24,7 @@ import type { Category, ServiceSong } from '../lib/types'
 import { CATEGORY_LABEL, STATUS_LABEL } from '../lib/types'
 import { SOURCE_STYLE, describeMedia } from '../lib/mediaLinks'
 import { apiUrl } from '../lib/api'
-import { cn, formatDateLong, formatTime } from '../lib/utils'
+import { cn, formatDateLong, formatarPrazo, formatTime } from '../lib/utils'
 
 interface EquipeItem {
   memberId: string
@@ -49,6 +52,10 @@ interface EscalaPublica {
     key: string | null
     bpm: number | null
     progression: string | null
+    /** MP3 enviado pelo ministro (id do arquivo no servidor). */
+    audioId: string | null
+    audioName: string | null
+    audioSize: number | null
   }>
 }
 
@@ -73,6 +80,22 @@ export function EscalaPublicaPage() {
   const [atualizando, setAtualizando] = useState(false)
   const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
+  /** Resposta de presença enviada por esta pessoa (fica salva no aparelho). */
+  const [resposta, setResposta] = useState<{
+    escalaId: string
+    memberId: string
+    confirmed: boolean
+  } | null>(() => {
+    if (typeof window === 'undefined' || !id) return null
+    try {
+      const raw = window.localStorage.getItem(`worshipflow:resposta:${id}`)
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  })
+  const [enviandoResposta, setEnviandoResposta] = useState(false)
+  const [erroResposta, setErroResposta] = useState<string | null>(null)
   const [activeSong, setActiveSong] = useState<ServiceSong | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const vivo = useRef(true)
@@ -158,6 +181,54 @@ export function EscalaPublicaPage() {
     return encontrados.length ? encontrados : null
   }, [escala, termo])
 
+  /** A resposta que esta pessoa já deu (para mostrar o estado na tela). */
+  const minhaResposta =
+    resposta &&
+    resposta.escalaId === escala?.id &&
+    achou?.[0]?.memberId === resposta.memberId
+      ? resposta
+      : null
+
+  /** Prazo da resposta: a sexta-feira antes do culto. */
+  const prazo = escala ? formatarPrazo(escala.date) : null
+
+  /** Envia a resposta de presença ("vou participar" / "não vou"). */
+  async function enviarResposta(confirmed: boolean) {
+    const pessoa = achou?.[0]
+    if (!pessoa || !escala) return
+    setEnviandoResposta(true)
+    setErroResposta(null)
+    try {
+      const response = await fetch(
+        apiUrl(`/api/escala?id=${encodeURIComponent(escala.id)}`),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            memberId: pessoa.memberId,
+            nome: pessoa.nome,
+            confirmado: confirmed,
+          }),
+        },
+      )
+      const data = (await response.json().catch(() => ({}))) as { error?: string }
+      if (!response.ok) throw new Error(data.error ?? 'Não foi possível enviar a resposta.')
+      const nova = { escalaId: escala.id, memberId: pessoa.memberId, confirmed }
+      setResposta(nova)
+      try {
+        window.localStorage.setItem(`worshipflow:resposta:${escala.id}`, JSON.stringify(nova))
+      } catch {
+        /* segue sem salvar no aparelho */
+      }
+    } catch (error) {
+      setErroResposta(
+        error instanceof Error ? error.message : 'Não foi possível enviar a resposta.',
+      )
+    } finally {
+      setEnviandoResposta(false)
+    }
+  }
+
   if (erro) {
     return (
       <div className="flex min-h-dvh items-center justify-center px-4 py-10">
@@ -189,21 +260,30 @@ export function EscalaPublicaPage() {
     <div className="min-h-dvh pb-16">
       {/* Cabeçalho */}
       <header className="border-b border-white/8 bg-ink-900/70 px-4 py-4 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-          <Logo size={34} withWordmark />
-          <div className="flex items-center gap-2">
+        {/* No celular a logo fica em uma linha e as opções em baixo, para
+            nenhum botão ficar escondido fora da tela. */}
+        <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          <div className="min-w-0">
+            <Logo size={34} withWordmark />
+          </div>
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
             <button
               type="button"
               onClick={() => void carregar(true)}
               title="Atualizar agora"
-              className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[0.68rem] font-medium text-zinc-300 transition hover:border-neon-cyan/40 hover:text-white"
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[0.68rem] font-medium text-zinc-300 transition hover:border-neon-cyan/40 hover:text-white"
             >
               <RefreshCw size={12} className={atualizando ? 'animate-spin' : ''} />
-              {atualizadoEm ? `Atualizado às ${atualizadoEm}` : 'Atualizar'}
+              <span className="sm:hidden">
+                {atualizadoEm ? `Atualizar · ${atualizadoEm}` : 'Atualizar'}
+              </span>
+              <span className="hidden sm:inline">
+                {atualizadoEm ? `Atualizado às ${atualizadoEm}` : 'Atualizar'}
+              </span>
             </button>
             <Link
               to="/login"
-              className="rounded-full border border-white/10 px-3 py-1.5 text-[0.68rem] font-medium text-zinc-300 transition hover:border-neon-cyan/40 hover:text-white"
+              className="min-w-0 flex-1 rounded-full border border-white/10 px-3 py-1.5 text-center text-[0.68rem] font-medium text-zinc-300 transition hover:border-neon-cyan/40 hover:text-white sm:flex-none sm:whitespace-nowrap"
             >
               Sou ministro · entrar
             </Link>
@@ -283,19 +363,84 @@ export function EscalaPublicaPage() {
           </div>
 
           {achou && (
-            <div className="mt-4 flex items-center gap-3 rounded-xl border border-emerald-400/25 bg-emerald-400/8 px-4 py-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-400/12 text-emerald-300 ring-1 ring-emerald-400/25">
-                <UserRound size={17} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-white">
-                  Sim! {achou[0].nome} está na escala.
-                </p>
-                <p className="text-xs text-emerald-200/80">
-                  {achou.length > 1 ? 'Suas funções: ' : 'Sua função: '}
-                  {achou.map((item) => item.funcao).join(', ')}
-                  {achou[0].observacao ? ` · ${achou[0].observacao}` : ''}
-                </p>
+            <div className="mt-4 rounded-xl border border-emerald-400/25 bg-emerald-400/8 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-400/12 text-emerald-300 ring-1 ring-emerald-400/25">
+                  <UserRound size={17} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">
+                    Sim! {achou[0].nome} está na escala.
+                  </p>
+                  <p className="text-xs text-emerald-200/80">
+                    {achou.length > 1 ? 'Suas funções: ' : 'Sua função: '}
+                    {achou.map((item) => item.funcao).join(', ')}
+                    {achou[0].observacao ? ` · ${achou[0].observacao}` : ''}
+                  </p>
+                </div>
+              </div>
+
+              {/* Resposta de presença: obrigatória para o ministro fechar a equipe */}
+              <div className="mt-3 border-t border-emerald-400/15 pt-3">
+                {minhaResposta ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold',
+                        minhaResposta.confirmed
+                          ? 'bg-emerald-400/15 text-emerald-200'
+                          : 'bg-amber-400/15 text-amber-200',
+                      )}
+                    >
+                      {minhaResposta.confirmed ? (
+                        <CheckCircle2 size={14} />
+                      ) : (
+                        <CircleSlash size={14} />
+                      )}
+                      {minhaResposta.confirmed
+                        ? 'Você confirmou presença'
+                        : 'Você avisou que não pode vir'}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={enviandoResposta}
+                      onClick={() => void enviarResposta(!minhaResposta.confirmed)}
+                      className="rounded-full border border-white/12 px-3 py-1.5 text-[0.7rem] font-medium text-zinc-300 transition hover:border-white/25 hover:text-white disabled:opacity-50"
+                    >
+                      Mudar resposta
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-zinc-300">
+                      {prazo
+                        ? `Avise o ministro até ${prazo} se você vai estar no culto.`
+                        : 'Avise o ministro se você vai estar no culto.'}
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap gap-2">
+                      <Button
+                        onClick={() => void enviarResposta(true)}
+                        disabled={enviandoResposta}
+                      >
+                        <CheckCircle2 size={15} /> Vou participar
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => void enviarResposta(false)}
+                        disabled={enviandoResposta}
+                      >
+                        <CircleSlash size={15} /> Não vou
+                      </Button>
+                    </div>
+                  </>
+                )}
+
+                {enviandoResposta && (
+                  <p className="mt-2 text-[0.7rem] text-zinc-400">Enviando sua resposta…</p>
+                )}
+                {erroResposta && (
+                  <p className="mt-2 text-[0.7rem] text-red-300">{erroResposta}</p>
+                )}
               </div>
             </div>
           )}
@@ -390,7 +535,7 @@ export function EscalaPublicaPage() {
               Repertório
             </h2>
             <p className="mt-0.5 text-xs text-zinc-500">
-              Toque na música para abrir o vídeo, a letra e a cifra.
+              Toque na música para ouvir o áudio, abrir o vídeo, a letra e a cifra.
             </p>
           </div>
 
@@ -411,6 +556,9 @@ export function EscalaPublicaPage() {
                     key: song.key ?? undefined,
                     bpm: song.bpm ?? undefined,
                     progression: song.progression ?? undefined,
+                    audioId: song.audioId ?? undefined,
+                    audioName: song.audioName ?? undefined,
+                    audioSize: song.audioSize ?? undefined,
                   }
 
                   return (
@@ -448,6 +596,11 @@ export function EscalaPublicaPage() {
                                 )}
                               >
                                 <Play size={9} /> {media.label}
+                              </span>
+                            )}
+                            {song.audioId && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-400/12 px-1.5 py-0.5 text-[0.62rem] font-semibold text-emerald-300 ring-1 ring-emerald-400/25">
+                                <FileAudio size={10} /> MP3
                               </span>
                             )}
                             {song.lyrics?.trim() && (

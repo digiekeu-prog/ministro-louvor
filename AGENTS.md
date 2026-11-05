@@ -37,7 +37,13 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
   de skills.
 - `src/components/ui.tsx` — `Button`, `Card`, `Field`, `Modal`, `Segmented`, etc.
 - `src/components/SongViewer.tsx` — player interno (vídeo em cima, letra/cifra embaixo). Sem rodapé
-  e sem botão de copiar: a letra usa todo o espaço que sobra (pedido do usuário).
+  e sem botão de copiar: a letra usa todo o espaço que sobra (pedido do usuário). Quando a música
+  tem MP3 enviado pelo ministro, o player de áudio aparece no lugar do vídeo (com o botão
+  "Ver vídeo" para trocar).
+- `src/components/SongAudioField.tsx` — campo "Enviar MP3" do editor de escala.
+- `src/lib/audio.ts` — envio do MP3 em partes (2 MB), URL do player e formatação de tamanho.
+- `api/_lib/audio.ts` + `api/audio.ts` — armazenamento e entrega dos MP3 (tabela `wf_audio` do
+  Postgres; em dev, arquivos em `.dev-data/audio`).
 - `src/lib/whatsapp.ts` — monta a mensagem **curta** da escala (culto, local, recado e link) e o
   link `wa.me`.
 - `src/components/WhatsappShare.tsx` — modal do aviso (preview, copiar, abrir no WhatsApp).
@@ -99,8 +105,18 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
   comparação ignora máscara e código do país. Não existe mais e-mail no cadastro — o token da
   sessão leva o **id** do integrante (`api/_lib/auth.ts`), não o telefone, para continuar valendo
   se o número mudar.
-- **O endpoint público `/api/escala` não vaza dado pessoal**: devolve só equipe (nome, função),
-  repertório e observações — nunca e-mail, telefone ou presença.
+- **O endpoint público `/api/escala` não vaza dado pessoal**: o GET devolve só equipe (nome,
+  função), repertório e observações — nunca e-mail, telefone nem presença. O **POST** é a resposta
+  de presença ("Vou participar" / "Não vou"): o servidor confere se a pessoa está na escala e se o
+  nome digitado bate com o cadastro, e grava a resposta como operação `presence` (chega nos
+  aparelhos dos ministros pela sincronização normal).
+- **Prazo da resposta**: a sexta-feira mais próxima antes do culto (`prazoResposta` em
+  `src/lib/utils.ts`). O ministro vê quem respondeu e quem falta em "Respostas da equipe"
+  (`src/pages/EscalaDetalhe.tsx`).
+- **MP3 do repertório**: o ministro envia o arquivo pelo editor da escala; o app envia em partes
+  de 2 MB (a function da Vercel aceita ~4,5 MB por requisição) e o servidor junta e guarda no
+  Postgres (`wf_audio`, limite de 15 MB). A música guarda só o `audioId` — o arquivo **não** viaja
+  na fila de sincronização. O player serve o arquivo com `Range` (dá para pular na música).
 - **A mesma pessoa pode estar em mais de uma função** (toca e canta ao mesmo tempo): isso é
   permitido e **não bloqueia** o salvamento — vira só um aviso informativo ("Também está em: …").
 - **A equipe técnica tem categoria própria** (`tecnica`): mesa de som, projeção, projeção de

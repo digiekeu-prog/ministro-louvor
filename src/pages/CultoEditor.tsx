@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { PageTitle } from '../components/AppShell'
 import { Avatar, Badge, Button, Card, Field, Input, Segmented, Select, Textarea } from '../components/ui'
+import { SongAudioField } from '../components/SongAudioField'
 import { useData } from '../store/DataContext'
 import type { Category, Service, ServiceSong, ServiceStatus, Slot } from '../lib/types'
 import {
@@ -759,6 +760,15 @@ export function CultoEditorPage() {
                         }
                         placeholder="BPM"
                         className="h-10"
+                      />
+                    </div>
+
+                    {/* Áudio MP3 (quando a música não está no YouTube) */}
+                    <div className="mt-3">
+                      <SongAudioField
+                        song={song}
+                        onChange={(patch) => updateSong(index, patch)}
+                        onMessage={showNotice}
                       />
                     </div>
 

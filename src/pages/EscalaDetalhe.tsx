@@ -4,7 +4,10 @@ import {
   ArrowLeft,
   CalendarDays,
   Check,
+  CheckCircle2,
+  CircleSlash,
   Clock,
+  FileAudio,
   FileText,
   Guitar,
   MapPin,
@@ -24,14 +27,14 @@ import { useData } from '../store/DataContext'
 import type { Category, ServiceSong } from '../lib/types'
 import { CATEGORY_LABEL, CATEGORY_SINGULAR, STATUS_LABEL } from '../lib/types'
 import { SOURCE_STYLE, describeMedia } from '../lib/mediaLinks'
-import { cn, formatDateLong, formatTime, relativeDay } from '../lib/utils'
+import { cn, formatDateLong, formatarPrazo, formatTime, relativeDay } from '../lib/utils'
 
 export function EscalaDetalhePage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   const { user, isAdmin } = useAuth()
-  const { getService, getMember, setPresence, isConfirmed } = useData()
+  const { getService, getMember, setPresence, isConfirmed, presence } = useData()
 
   const [activeSong, setActiveSong] = useState<ServiceSong | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
@@ -60,6 +63,42 @@ export function EscalaDetalhePage() {
   const mySlots = service.slots.filter((slot) => slot.memberId === user?.id)
   const mySlot = mySlots[0]
   const confirmed = user ? isConfirmed(user.id, service.id) : false
+
+  /**
+   * Quem já respondeu sobre a presença (o link público da escala).
+   * O ministro usa isso para fechar a equipe sem perder tempo.
+   */
+  const respostas = service.slots
+    .filter((slot) => slot.memberId)
+    .reduce<
+      Array<{
+        memberId: string
+        nome: string
+        funcoes: string[]
+        resposta: 'sim' | 'nao' | 'pendente'
+      }>
+    >((lista, slot) => {
+      const memberId = slot.memberId as string
+      const existente = lista.find((item) => item.memberId === memberId)
+      if (existente) {
+        if (!existente.funcoes.includes(slot.functionName)) {
+          existente.funcoes.push(slot.functionName)
+        }
+        return lista
+      }
+      const resposta = presence.find(
+        (p) => p.memberId === memberId && p.serviceId === service.id,
+      )
+      lista.push({
+        memberId,
+        nome: getMember(memberId)?.name ?? 'Integrante',
+        funcoes: [slot.functionName],
+        resposta: resposta ? (resposta.confirmed ? 'sim' : 'nao') : 'pendente',
+      })
+      return lista
+    }, [])
+  const responderam = respostas.filter((item) => item.resposta !== 'pendente').length
+  const pendentes = respostas.filter((item) => item.resposta === 'pendente').length
 
   return (
     <div className="pb-10">
@@ -130,6 +169,73 @@ export function EscalaDetalhePage() {
           </div>
         </div>
       </Card>
+
+      {/* ============ RESPOSTAS DA EQUIPE (só o ministro) ============ */}
+      {isAdmin && respostas.length > 0 && (
+        <Card className="mb-5 overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-5 py-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={18} className="text-emerald-300" />
+              <h2 className="font-display text-lg font-semibold text-white">
+                Respostas da equipe
+              </h2>
+            </div>
+            <Badge tone={pendentes ? 'gold' : 'green'}>
+              {responderam} de {respostas.length}
+            </Badge>
+          </div>
+
+          <div className="px-5 py-4">
+            <p className="mb-3 text-xs text-zinc-500">
+              Cada integrante responde pelo link da escala até{' '}
+              <strong className="text-zinc-300">{formatarPrazo(service.date)}</strong>. Assim a
+              equipe fecha sem o ministro perder tempo trocando gente.
+            </p>
+
+            {pendentes > 0 && (
+              <p className="mb-3 rounded-xl border border-amber-400/25 bg-amber-400/8 px-3.5 py-2.5 text-xs text-amber-100">
+                <strong className="font-semibold">
+                  {pendentes === 1
+                    ? `${pendentes} pessoa ainda não respondeu.`
+                    : `${pendentes} pessoas ainda não responderam.`}
+                </strong>{' '}
+                Mande o link da escala de novo para quem está pendente.
+              </p>
+            )}
+
+            <ul className="divide-y divide-white/5">
+              {respostas.map((item) => (
+                <li key={item.memberId} className="flex items-center gap-3 py-2.5">
+                  <Avatar
+                    name={item.nome}
+                    hue={getMember(item.memberId)?.hue ?? 200}
+                    size={34}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-zinc-100">{item.nome}</p>
+                    <p className="truncate text-[0.7rem] text-zinc-500">
+                      {item.funcoes.join(' · ')}
+                    </p>
+                  </div>
+                  {item.resposta === 'sim' ? (
+                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-400/12 px-2.5 py-1 text-[0.68rem] font-semibold text-emerald-300">
+                      <CheckCircle2 size={13} /> Vai estar lá
+                    </span>
+                  ) : item.resposta === 'nao' ? (
+                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-400/12 px-2.5 py-1 text-[0.68rem] font-semibold text-amber-300">
+                      <CircleSlash size={13} /> Não vem
+                    </span>
+                  ) : (
+                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/6 px-2.5 py-1 text-[0.68rem] font-semibold text-zinc-400">
+                      Sem resposta
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+      )}
 
       {/* ============ MINHA FUNÇÃO (visão do músico) ============ */}
       {mySlot && (
@@ -312,6 +418,11 @@ export function EscalaDetalhePage() {
                               )}
                             >
                               <Play size={9} /> {media.label}
+                            </span>
+                          )}
+                          {song.audioId && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-400/12 px-1.5 py-0.5 text-[0.62rem] font-semibold text-emerald-300 ring-1 ring-emerald-400/25">
+                              <FileAudio size={10} /> MP3
                             </span>
                           )}
                           {song.lyrics?.trim() && (

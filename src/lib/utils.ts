@@ -89,3 +89,31 @@ export function firstName(name: string) {
 export function pluralize(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`
 }
+
+/**
+ * Prazo da resposta de presença: a **sexta-feira** mais próxima antes do culto
+ * (é o dia em que o ministro precisa fechar a equipe).
+ */
+export function prazoResposta(iso: string): Date {
+  const data = parseISODate(iso)
+  // dias desde a última sexta-feira (0 = sexta, 6 = quinta)
+  const desdeSexta = (data.getDay() + 7 - 5) % 7
+  data.setDate(data.getDate() - desdeSexta)
+  data.setHours(0, 0, 0, 0)
+  return data
+}
+
+/** O prazo em texto: 'sexta-feira, 06/11'. */
+export function formatarPrazo(iso: string): string {
+  const data = prazoResposta(iso)
+  const d = `${data.getDate()}`.padStart(2, '0')
+  const m = `${data.getMonth() + 1}`.padStart(2, '0')
+  return `${WEEKDAYS[data.getDay()]}, ${d}/${m}`
+}
+
+/** O prazo já passou? */
+export function prazoVencido(iso: string): boolean {
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  return prazoResposta(iso).getTime() < hoje.getTime()
+}

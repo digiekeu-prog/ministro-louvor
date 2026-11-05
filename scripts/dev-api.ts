@@ -9,15 +9,25 @@
  */
 
 import { createServer } from 'node:http'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
-import { handleLogin, handlePull, handlePublicScale, handlePush } from '../api/_lib/app.ts'
+import { handleAudioDelete, handleAudioGet, handleAudioUpload } from '../api/_lib/audio.ts'
+import type { AudioMeta, AudioStore, AudioUploadBody } from '../api/_lib/audio.ts'
+import {
+  authenticate,
+  handleLogin,
+  handlePull,
+  handlePublicResponse,
+  handlePublicScale,
+  handlePush,
+} from '../api/_lib/app.ts'
 import type { Store } from '../api/_lib/store.ts'
 import type { Collection, SyncChange, SyncOp } from '../src/lib/syncState.ts'
 import { seedMembers, seedPresence, seedServices, seedSongs } from '../src/lib/seed.ts'
 
 const PORTA = Number(process.env.PORT ?? 8787)
 const ARQUIVO = resolve(process.cwd(), '.dev-data/sync.json')
+const PASTA_AUDIO = resolve(process.cwd(), '.dev-data/audio')
 
 interface Arquivo {
   seq: number
@@ -99,6 +109,55 @@ const store: Store = {
 
 await carregar()
 
+/**
+ * Os MP3 do repertório ficam em arquivos na pasta `.dev-data/audio`
+ * (na nuvem eles vão para o Postgres).
+ */
+const audioStore: AudioStore = {
+  async saveChunk(uploadId: string, parte: number, bytes: Buffer) {
+    const pasta = resolve(PASTA_AUDIO, 'tmp')
+    await mkdir(pasta, { recursive: true })
+    await writeFile(resolve(pasta, `${uploadId}.${parte}`), bytes)
+  },
+  async readChunks(uploadId: string, total: number) {
+    const pasta = resolve(PASTA_AUDIO, 'tmp')
+    const partes: Buffer[] = []
+    for (let parte = 0; parte < total; parte++) {
+      partes.push(await readFile(resolve(pasta, `${uploadId}.${parte}`)))
+    }
+    return partes
+  },
+  async clearChunks(uploadId: string) {
+    const pasta = resolve(PASTA_AUDIO, 'tmp')
+    const arquivos = await readdir(pasta).catch(() => [] as string[])
+    await Promise.all(
+      arquivos
+        .filter((nome) => nome.startsWith(`${uploadId}.`))
+        .map((nome) => rm(resolve(pasta, nome), { force: true })),
+    )
+  },
+  async save(meta: AudioMeta, bytes: Buffer) {
+    await mkdir(PASTA_AUDIO, { recursive: true })
+    await writeFile(resolve(PASTA_AUDIO, `${meta.id}.bin`), bytes)
+    await writeFile(resolve(PASTA_AUDIO, `${meta.id}.json`), JSON.stringify(meta), 'utf8')
+  },
+  async read(id: string) {
+    try {
+      const bytes = await readFile(resolve(PASTA_AUDIO, `${id}.bin`))
+      const meta = JSON.parse(
+        await readFile(resolve(PASTA_AUDIO, `${id}.json`), 'utf8'),
+      ) as AudioMeta
+      return { meta, bytes }
+    } catch {
+      return null
+    }
+  },
+  async remove(id: string) {
+    await rm(resolve(PASTA_AUDIO, `${id}.bin`), { force: true })
+    await rm(resolve(PASTA_AUDIO, `${id}.json`), { force: true })
+  },
+}
+
 function tokenDoRequisicao(req: import('node:http').IncomingMessage): string | null {
   const raw = req.headers.authorization
   if (!raw) return null
@@ -139,7 +198,10 @@ const servidor = createServer(async (req, res) => {
 
   try {
     if (url.pathname === '/api/login' && req.method === 'POST') {
-      const result = await handleLogin(store, (await corpo(req)) as { email?: string } | null)
+      const result = await handleLogin(
+        store,
+        (await corpo(req)) as { phone?: string; password?: string; email?: string } | null,
+      )
       res.statusCode = result.status
       res.end(JSON.stringify(result.body))
       return
@@ -147,6 +209,22 @@ const servidor = createServer(async (req, res) => {
 
     if (url.pathname === '/api/escala' && req.method === 'GET') {
       const result = await handlePublicScale(store, url.searchParams.get('id') ?? '')
+      res.statusCode = result.status
+      res.end(JSON.stringify(result.body))
+      return
+    }
+
+    if (url.pathname === '/api/escala' && req.method === 'POST') {
+      const body = (await corpo(req)) as {
+        memberId?: string
+        nome?: string
+        confirmado?: boolean
+      } | null
+      const result = await handlePublicResponse(
+        store,
+        url.searchParams.get('id') ?? '',
+        body,
+      )
       res.statusCode = result.status
       res.end(JSON.stringify(result.body))
       return
@@ -165,6 +243,52 @@ const servidor = createServer(async (req, res) => {
       const result = await handlePush(store, body, tokenDoRequisicao(req))
       res.statusCode = result.status
       res.end(JSON.stringify(result.body))
+      return
+    }
+
+    /* ------------------------------ áudio (MP3) ------------------------------ */
+    if (url.pathname === '/api/audio' && req.method === 'POST') {
+      const auth = await authenticate(store, tokenDoRequisicao(req))
+      if (!auth.ok) {
+        res.statusCode = auth.result.status
+        res.end(JSON.stringify(auth.result.body))
+        return
+      }
+      const body = (await corpo(req)) as AudioUploadBody | null
+      const result = await handleAudioUpload(audioStore, body, auth.role === 'admin')
+      res.statusCode = result.status
+      res.end(JSON.stringify(result.body))
+      return
+    }
+
+    if (url.pathname === '/api/audio' && req.method === 'DELETE') {
+      const auth = await authenticate(store, tokenDoRequisicao(req))
+      if (!auth.ok) {
+        res.statusCode = auth.result.status
+        res.end(JSON.stringify(auth.result.body))
+        return
+      }
+      const result = await handleAudioDelete(
+        audioStore,
+        url.searchParams.get('id') ?? '',
+        auth.role === 'admin',
+      )
+      res.statusCode = result.status
+      res.end(JSON.stringify(result.body))
+      return
+    }
+
+    if (url.pathname === '/api/audio' && req.method === 'GET') {
+      const range = req.headers.range
+      const result = await handleAudioGet(audioStore, url.searchParams.get('id') ?? '', range)
+      if (!result) {
+        res.statusCode = 404
+        res.end(JSON.stringify({ error: 'Áudio não encontrado.' }))
+        return
+      }
+      for (const [nome, valor] of Object.entries(result.headers)) res.setHeader(nome, valor)
+      res.statusCode = result.status
+      res.end(result.body)
       return
     }
 

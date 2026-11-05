@@ -14,7 +14,9 @@ import {
   findMemberByPhone,
   itemId,
   stateFromChanges,
+  upsertOp,
 } from '../../src/lib/syncState.ts'
+import type { Presence } from '../../src/lib/types.ts'
 import { phoneKey } from '../../src/lib/phone.ts'
 import { getSecret, signToken, verifyToken } from './auth.ts'
 import type { Store } from './store.ts'
@@ -43,7 +45,7 @@ function lastSeq(changes: SyncChange[]): number {
 }
 
 /** Descobre quem está logado e qual o papel (admin ou membro da equipe). */
-async function authenticate(
+export async function authenticate(
   store: Store,
   token: string | null,
 ): Promise<{ ok: true; id: string; actor: string; role: Role } | { ok: false; result: ApiResult }> {
@@ -202,8 +204,74 @@ export async function handlePublicScale(store: Store, id: string): Promise<ApiRe
           key: song.key ?? null,
           bpm: song.bpm ?? null,
           progression: song.progression ?? null,
+          // o MP3 enviado pelo ministro (o arquivo fica guardado no servidor)
+          audioId: song.audioId ?? null,
+          audioName: song.audioName ?? null,
+          audioSize: song.audioSize ?? null,
         })),
       },
+    },
+  }
+}
+
+/**
+ * POST /api/escala?id=svc_xxx — resposta de presença vinda do link público.
+ *
+ * É por aqui que o músico avisa se vai estar no culto ("Vou participar" ou
+ * "Não vou"). A resposta vira uma operação de presença no log, então chega
+ * nos aparelhos dos ministros pela sincronização normal.
+ *
+ * O link é público, então o servidor confere se a pessoa está de fato na
+ * escala e se o nome digitado bate com o cadastro.
+ */
+export async function handlePublicResponse(
+  store: Store,
+  id: string,
+  body: { memberId?: string; nome?: string; confirmado?: boolean } | null,
+): Promise<ApiResult> {
+  await store.ensure()
+
+  const scaleId = (id ?? '').trim()
+  if (!scaleId) return { status: 400, body: { error: 'Informe a escala.' } }
+
+  const memberId = (body?.memberId ?? '').trim()
+  const nome = (body?.nome ?? '').trim().toLowerCase()
+  if (!memberId || !nome) {
+    return { status: 400, body: { error: 'Digite seu nome para enviar a resposta.' } }
+  }
+
+  const state = stateFromChanges(await store.allChanges())
+  const service = state.services.find((s) => s.id === scaleId)
+  if (!service) return { status: 404, body: { error: 'Escala não encontrada.' } }
+
+  const naEscala = service.slots.some((slot) => slot.memberId === memberId)
+  if (!naEscala) {
+    return { status: 403, body: { error: 'Você não está na lista desta escala.' } }
+  }
+
+  const member = state.members.find((m) => m.id === memberId)
+  if (!member || member.name.trim().toLowerCase() !== nome) {
+    return {
+      status: 403,
+      body: { error: 'O nome não bate com a escala. Digite seu nome como está na lista.' },
+    }
+  }
+
+  const presence: Presence = {
+    memberId,
+    serviceId: scaleId,
+    confirmed: body?.confirmado !== false,
+    respondedAt: new Date().toISOString(),
+  }
+
+  await store.append([upsertOp('presence', presence)], `publico:${memberId}`)
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      confirmado: presence.confirmed,
+      respondedAt: presence.respondedAt,
     },
   }
 }

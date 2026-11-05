@@ -200,9 +200,13 @@ export async function syncLogin(phone: string): Promise<{
   }
 }
 
+/** Token da sessão (usado para enviar MP3 e falar com a API). */
+export function syncToken(): string | null {
+  return token
+}
+
 /** Sai da sincronização (mantém os dados locais). */
-export function syncLogout() {
-  stop()
+export function syncLogout() {  stop()
   token = null
   seq = 0
   try {
