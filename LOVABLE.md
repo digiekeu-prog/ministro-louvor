@@ -129,6 +129,12 @@ Vercel.
 - **Servidor fora do ar não tranca a porta**: um 5xx no login (cota do Neon, banco fora) entra com a
   lista salva no aparelho, como no offline — e **não** encerra a sessão do ministro (só 403/404
   de verdade encerram).
+- **A cota do Neon tem aviso próprio**: a API reconhece o `402` do driver (`isQuotaError`) e
+  responde 503 com `code: 'cota_neon'`; o app mostra o selo "Banco sem cota" e explica que nada
+  foi perdido.
+- **A página pública guarda a escala no aparelho**: com o servidor fora, o músico continua vendo a
+  equipe e o repertório ("Mostrando a versão salva neste aparelho"). "Escala não encontrada" só
+  aparece em 404 de verdade.
 - **Idioma da UI e dos comentários: português do Brasil.**
 - **A mensagem do WhatsApp é curta de propósito** (pedido do usuário): só o culto, o local, o
   recado (observações) e o link público. **Nunca** mandar a lista da equipe nem o repertório no

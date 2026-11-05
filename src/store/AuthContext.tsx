@@ -4,7 +4,16 @@ import type { Member, SessionUser } from '../lib/types'
 import { STORAGE_KEYS, readStore, removeStore, writeStore } from '../lib/storage'
 import { AuthContext } from './contexts'
 import type { AuthContextValue } from './contexts'
-import { hasToken, markOffline, markServerError, resumeSync, syncLogin, syncLogout, useSyncStatus } from '../lib/sync'
+import {
+  hasToken,
+  markOffline,
+  markQuota,
+  markServerError,
+  resumeSync,
+  syncLogin,
+  syncLogout,
+  useSyncStatus,
+} from '../lib/sync'
 import { phoneKey, samePhone } from '../lib/phone'
 import { listaEhExemplo } from '../lib/seed'
 
@@ -232,6 +241,10 @@ export function AuthProvider({
           markOffline(
             'Sem conexão com o servidor. Os dados ficarão só neste aparelho até a internet voltar.',
           )
+        } else if (remote.code === 'cota_neon') {
+          markQuota(
+            'O banco de dados está sem cota no momento (plano do Neon). Nada foi perdido — o app continua funcionando só neste aparelho até a cota voltar.',
+          )
         } else {
           markServerError(
             'O servidor está com problema agora. Os dados ficarão só neste aparelho até o servidor voltar.',
@@ -288,9 +301,15 @@ export function AuthProvider({
           setAuthError(mensagem)
           return { ok: false, error: mensagem }
         }
-        markServerError(
-          'O servidor está com problema agora. Os dados ficarão só neste aparelho até o servidor voltar.',
-        )
+        if (remote.code === 'cota_neon') {
+          markQuota(
+            'O banco de dados está sem cota no momento (plano do Neon). Nada foi perdido — o app continua funcionando só neste aparelho até a cota voltar.',
+          )
+        } else {
+          markServerError(
+            'O servidor está com problema agora. Os dados ficarão só neste aparelho até o servidor voltar.',
+          )
+        }
       }
       setSession({
         id: member.id,

@@ -1,5 +1,6 @@
 import type { Member, Presence, Service, ServiceSong, Song } from './types'
-import { phoneKey } from './phone'
+// com a extensão: o `seed.ts` também é carregado pelo Node (functions da Vercel)
+import { phoneKey } from './phone.ts'
 
 const DAY = 86400000
 

@@ -17,7 +17,15 @@ import {
 } from './_lib/audio.ts'
 import type { AudioUploadBody } from './_lib/audio.ts'
 import { authenticate } from './_lib/app.ts'
-import { applyCors, bearerToken, fail, queryValue, readBody } from './_lib/http.ts'
+import {
+  applyCors,
+  bearerToken,
+  fail,
+  failQuota,
+  isQuotaError,
+  queryValue,
+  readBody,
+} from './_lib/http.ts'
 import type { ApiRequest, ApiResponse } from './_lib/http.ts'
 import { createPostgresAudioStore, createPostgresStore } from './_lib/postgres.ts'
 
@@ -85,6 +93,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro inesperado'
     console.error('[api/audio]', message)
+    // banco sem cota (plano do Neon): o app precisa saber que é isso
+    if (isQuotaError(error)) {
+      failQuota(res)
+      return
+    }
     fail(res, 'Não foi possível lidar com o áudio. Tente novamente.')
   }
 }

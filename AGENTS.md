@@ -136,6 +136,13 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
   o login **entra com a lista salva no aparelho** — a mesma regra do offline (o celular precisa
   estar na lista). Um 5xx **não** encerra a sessão do ministro (só 403/404 de verdade encerram): o
   `AuthContext` distingue "recusou" de "deu erro" (`remote.reason === 'erro'`).
+- **A cota do Neon tem aviso próprio**: a API reconhece o `402` do driver (`isQuotaError` em
+  `api/_lib/http.ts`) e responde **503 com `code: 'cota_neon'`**. O app vira o estado `sem_cota`
+  (selo "Banco sem cota") e explica que nada foi perdido — não é falha do app.
+- **A página pública guarda a escala no aparelho** (`worshipflow:escala:<id>`): com o servidor
+  fora, o músico continua vendo a equipe e o repertório, com o aviso "Mostrando a versão salva
+  neste aparelho". "Escala não encontrada" só aparece em 404 de verdade — nunca por erro do
+  servidor.
 - **Entrada automática do dono**: em `src/pages/Login.tsx`, `CELULAR_DONO`/`SENHA_DONO` — ao digitar
   o celular do dono, a senha entra sozinha e o app entra junto. A senha é livre no app (o que
   libera o acesso é o celular estar na lista da equipe), então ela pode ficar no front.

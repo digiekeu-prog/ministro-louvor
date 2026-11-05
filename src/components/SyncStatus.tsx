@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   CheckCircle2,
   CloudOff,
+  Database,
   RefreshCw,
   ShieldAlert,
   TriangleAlert,
@@ -42,6 +43,11 @@ export function SyncBadge({ className }: { className?: string }) {
       icon: ShieldAlert,
       texto: 'Sem acesso',
       classes: 'text-red-300/90 ring-red-400/25 bg-red-400/8',
+    },
+    sem_cota: {
+      icon: Database,
+      texto: status.pending > 0 ? `Banco sem cota (${status.pending})` : 'Banco sem cota',
+      classes: 'text-amber-300/90 ring-amber-400/25 bg-amber-400/8',
     },
     erro: {
       icon: CloudOff,
@@ -107,6 +113,14 @@ export function SyncAlertBanner() {
         status.message ??
         'Seu e-mail não está mais na lista da equipe do servidor. Fale com o ministro.',
       classes: 'border-red-400/25 bg-red-400/8 text-red-100',
+    },
+    sem_cota: {
+      icon: Database,
+      titulo: 'O banco de dados está sem cota',
+      detalhe:
+        status.message ??
+        'O plano do Neon acabou (cota mensal). Nada foi perdido — o app segue funcionando só neste aparelho. Para resolver: Vercel → Storage → Neon → upgrade, ou console.neon.tech.',
+      classes: 'border-amber-400/25 bg-amber-400/8 text-amber-100',
     },
     erro: {
       icon: CloudOff,

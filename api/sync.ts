@@ -4,7 +4,15 @@
  */
 
 import { handlePull, handlePush } from './_lib/app.ts'
-import { applyCors, bearerToken, fail, queryValue, readBody } from './_lib/http.ts'
+import {
+  applyCors,
+  bearerToken,
+  fail,
+  failQuota,
+  isQuotaError,
+  queryValue,
+  readBody,
+} from './_lib/http.ts'
 import type { ApiRequest, ApiResponse } from './_lib/http.ts'
 import { createPostgresStore } from './_lib/postgres.ts'
 
@@ -34,6 +42,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro inesperado'
     console.error('[api/sync]', message)
+    // banco sem cota (plano do Neon): o app precisa saber que é isso
+    if (isQuotaError(error)) {
+      failQuota(res)
+      return
+    }
     fail(res, 'Não foi possível sincronizar com o servidor. Tente novamente.')
   }
 }

@@ -57,6 +57,36 @@ export function fail(res: ApiResponse, message: string) {
 }
 
 /**
+ * O banco (Neon) está sem cota?
+ *
+ * O driver do Neon responde `402` com "Your account or project has exceeded
+ * the quota" quando o plano free estourou. Não é bug do app — e o usuário
+ * precisa saber disso para resolver (upgrade do plano), não ficar achando
+ * que o aplicativo quebrou.
+ */
+export function isQuotaError(error: unknown): boolean {
+  if (!error) return false
+  const texto = [
+    error instanceof Error ? error.message : String(error),
+    String((error as { cause?: unknown }).cause ?? ''),
+    String((error as { response?: unknown }).response ?? ''),
+  ].join(' ')
+  return /exceeded the quota|status 402|http status 402/i.test(texto)
+}
+
+/** Mensagem que o app mostra quando o banco está sem cota. */
+export const MENSAGEM_COTA =
+  'O banco de dados está sem cota no momento (plano do Neon). Nada foi perdido — o app continua funcionando só neste aparelho até a cota voltar.'
+
+/** Código que o app usa para mostrar o aviso certo (cota do banco). */
+export const CODIGO_COTA = 'cota_neon'
+
+/** Responde 503 avisando que a cota do banco acabou. */
+export function failQuota(res: ApiResponse) {
+  res.status(503).json({ error: MENSAGEM_COTA, code: CODIGO_COTA })
+}
+
+/**
  * CORS — permite chamar a API de outro domínio (ex.: o preview do Lovable,
  * em `*.lovable.app`). Não usa cookie (a sessão é um token Bearer), então
  * refletir a origem não abre brecha de CSRF.

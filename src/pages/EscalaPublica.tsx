@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleSlash,
   Clock,
+  CloudOff,
   FileAudio,
   FileText,
   Guitar,
@@ -69,6 +70,34 @@ interface EscalaPublica {
 const INTERVALO_ATUALIZACAO = 8000
 
 /**
+ * A escala fica salva no aparelho de quem abre o link.
+ *
+ * Assim, se o servidor estiver fora do ar (cota do banco, internet caindo),
+ * o músico continua vendo a equipe e o repertório — com um aviso de que é a
+ * versão salva. Sem isso, ele veria "escala não encontrada" e acharia que o
+ * link tinha morrido.
+ */
+const CHAVE_CACHE = (id: string) => `worshipflow:escala:${id}`
+
+function lerCache(id: string): EscalaPublica | null {
+  if (typeof window === 'undefined' || !id) return null
+  try {
+    const raw = window.localStorage.getItem(CHAVE_CACHE(id))
+    return raw ? (JSON.parse(raw) as EscalaPublica) : null
+  } catch {
+    return null
+  }
+}
+
+function gravarCache(id: string, escala: EscalaPublica) {
+  try {
+    window.localStorage.setItem(CHAVE_CACHE(id), JSON.stringify(escala))
+  } catch {
+    /* cota cheia no navegador: segue sem salvar */
+  }
+}
+
+/**
  * Página pública da escala: é o link que o ministro manda no WhatsApp.
  *
  * Não exige login — quem não tem e-mail (ou não quer criar conta) abre e
@@ -80,9 +109,11 @@ const INTERVALO_ATUALIZACAO = 8000
  */
 export function EscalaPublicaPage() {
   const { id } = useParams()
-  const [escala, setEscala] = useState<EscalaPublica | null>(null)
+  /** Começa pela versão salva no aparelho (se houver): a página abre na hora. */
+  const [escala, setEscala] = useState<EscalaPublica | null>(() => lerCache(id ?? ''))
   const [erro, setErro] = useState<string | null>(null)
-  const [carregando, setCarregando] = useState(true)
+  /** O servidor não respondeu: estamos mostrando a versão salva. */
+  const [servidorFora, setServidorFora] = useState(false)
   const [atualizando, setAtualizando] = useState(false)
   const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
@@ -105,6 +136,12 @@ export function EscalaPublicaPage() {
   const [activeSong, setActiveSong] = useState<ServiceSong | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const vivo = useRef(true)
+  /**
+   * A escala que está na tela. Fica num ref (e não no estado) para o
+   * `carregar` não depender do estado — senão cada atualização criaria um
+   * `carregar` novo e a página ficaria recarregando sem parar.
+   */
+  const escalaRef = useRef<EscalaPublica | null>(null)
 
   useEffect(() => {
     vivo.current = true
@@ -112,6 +149,11 @@ export function EscalaPublicaPage() {
       vivo.current = false
     }
   }, [])
+
+  // mantém a ref com a escala da tela (sem depender do estado no `carregar`)
+  useEffect(() => {
+    escalaRef.current = escala
+  }, [escala])
 
   /** Busca a escala no servidor (silencioso = sem mostrar a tela de loading). */
   const carregar = useCallback(
@@ -121,22 +163,44 @@ export function EscalaPublicaPage() {
       try {
         const response = await fetch(apiUrl(`/api/escala?id=${encodeURIComponent(id ?? '')}`))
         const data = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(data?.error ?? 'Não foi possível carregar a escala.')
+        if (!response.ok) {
+          const erro = new Error(
+            data?.error ?? 'Não foi possível carregar a escala.',
+          ) as Error & { status?: number }
+          erro.status = response.status
+          throw erro
+        }
         if (!vivo.current) return
-        setEscala(data?.escala as EscalaPublica)
+        const nova = data?.escala as EscalaPublica
+        escalaRef.current = nova
+        setEscala(nova)
+        if (id) gravarCache(id, nova)
         setErro(null)
+        setServidorFora(false)
         setAtualizadoEm(
           new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         )
       } catch (error) {
         if (!vivo.current) return
-        // se já tem escala na tela, continua mostrando (offline) e tenta depois
+        // servidor fora do ar: continua mostrando a versão salva no aparelho
+        const status = (error as { status?: number }).status
+        if (escalaRef.current) {
+          setServidorFora(true)
+          if (!silencioso) setErro(null)
+          return
+        }
+        // ainda não tem nada na tela: mostra o que aconteceu de verdade
         if (!silencioso) {
-          setErro(error instanceof Error ? error.message : 'Não foi possível carregar a escala.')
+          setErro(
+            status === 404
+              ? 'Este link de escala não existe (ou foi apagado).'
+              : (error instanceof Error
+                  ? error.message
+                  : 'Não foi possível carregar a escala.'),
+          )
         }
       } finally {
         if (vivo.current) {
-          setCarregando(false)
           setAtualizando(false)
         }
       }
@@ -265,7 +329,11 @@ export function EscalaPublicaPage() {
       <div className="flex min-h-dvh items-center justify-center px-4 py-10">
         <EmptyState
           icon={<CalendarDays size={22} />}
-          title="Escala não encontrada"
+          title={
+            erro.startsWith('Este link de escala não existe')
+              ? 'Escala não encontrada'
+              : 'Não consegui carregar a escala agora'
+          }
           description={erro}
           action={
             <Button onClick={() => window.location.reload()}>
@@ -277,7 +345,8 @@ export function EscalaPublicaPage() {
     )
   }
 
-  if (carregando || !escala) {
+  // sem escala na tela (nem no cache): só a tela de carregando
+  if (!escala) {
     return (
       <div className="flex min-h-dvh items-center justify-center px-4">
         <p className="text-sm text-zinc-500">Carregando a escala…</p>
@@ -323,6 +392,20 @@ export function EscalaPublicaPage() {
       </header>
 
       <main className="mx-auto w-full max-w-3xl px-4 pt-6 sm:px-6">
+        {/* Servidor fora do ar: mostramos a versão salva neste aparelho */}
+        {servidorFora && (
+          <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-amber-400/25 bg-amber-400/8 px-4 py-3 text-sm text-amber-100">
+            <CloudOff size={17} className="mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-semibold">Mostrando a versão salva neste aparelho.</p>
+              <p className="mt-0.5 text-xs opacity-90">
+                O servidor está fora do ar agora. Assim que ele voltar, esta página se atualiza
+                sozinha — o repertório e a equipe continuam aqui enquanto isso.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Título */}
         <Card className="relative mb-5 overflow-hidden">
           <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-neon-cyan/10 blur-3xl" />

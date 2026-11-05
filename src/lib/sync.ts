@@ -24,6 +24,7 @@ export type SyncState =
   | 'sincronizado'
   | 'sem_conexao'
   | 'sem_acesso'
+  | 'sem_cota'
   | 'erro'
 
 /** Motivo pelo qual o login foi recusado pelo servidor. */
@@ -141,9 +142,12 @@ export function useSyncStatus(): SyncStatus {
 
 class SyncError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  /** Código que o servidor manda (ex.: 'cota_neon' = banco sem cota). */
+  code?: string
+  constructor(message: string, status: number, code?: string) {
     super(message)
     this.status = status
+    this.code = code
   }
 }
 
@@ -157,9 +161,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
 
-  const data = (await response.json().catch(() => ({}))) as T & { error?: string }
+  const data = (await response.json().catch(() => ({}))) as T & { error?: string; code?: string }
   if (!response.ok) {
-    throw new SyncError(data?.error ?? 'Não foi possível falar com o servidor.', response.status)
+    throw new SyncError(
+      data?.error ?? 'Não foi possível falar com o servidor.',
+      response.status,
+      data?.code,
+    )
   }
   return data
 }
@@ -179,6 +187,7 @@ export async function syncLogin(phone: string): Promise<{
   error?: string
   offline?: boolean
   reason?: LoginFailure
+  code?: string
   user?: { id: string; name: string; phone: string; category: Member['category'] }
 }> {
   try {
@@ -204,7 +213,7 @@ export async function syncLogin(phone: string): Promise<{
           : error.status === 403
             ? 'inativo'
             : 'erro'
-      return { ok: false, error: error.message, reason }
+      return { ok: false, error: error.message, reason, code: error.code }
     }
     return {
       ok: false,
@@ -349,17 +358,23 @@ async function tick() {
     // erro de rede (fetch quebrou) = sem internet; resposta HTTP = erro do servidor
     const semConexao = !(error instanceof SyncError)
 
+    // banco sem cota (plano do Neon): não é falha do app — o aviso na tela
+    // precisa explicar isso (e o app segue funcionando só neste aparelho)
+    const semCota = error instanceof SyncError && error.code === 'cota_neon'
+
     // não martela o servidor: depois de um erro a espera dobra (até o limite).
     // Erro do servidor (5xx) é o caso grave — cada tentativa acorda o banco.
     const limite = semConexao ? MAX_ATRASO_REDE : MAX_ATRASO_SERVIDOR
     atrasoErro = Math.min(atrasoErro ? atrasoErro * 2 : 15000, limite)
 
     setStatus({
-      state: semConexao
-        ? failures >= MAX_RETRIES
-          ? 'sem_conexao'
-          : 'conectando'
-        : 'erro',
+      state: semCota
+        ? 'sem_cota'
+        : semConexao
+          ? failures >= MAX_RETRIES
+            ? 'sem_conexao'
+            : 'conectando'
+          : 'erro',
       message: semConexao
         ? 'Sem conexão com o servidor. As alterações ficam guardadas neste aparelho e vão assim que a internet voltar.'
         : mensagem,
@@ -394,6 +409,21 @@ export function markOffline(message?: string) {
     message:
       message ??
       'Sem conexão com o servidor. As alterações ficam guardadas neste aparelho e vão assim que a internet voltar.',
+  })
+}
+
+/**
+ * Marca que o banco de dados está sem cota (plano do Neon).
+ *
+ * Não é falha do app: os dados estão intactos no banco e o app continua
+ * funcionando só neste aparelho até a cota voltar.
+ */
+export function markQuota(message?: string) {
+  setStatus({
+    state: 'sem_cota',
+    message:
+      message ??
+      'O banco de dados está sem cota no momento (plano do Neon). Nada foi perdido — o app continua funcionando só neste aparelho até a cota voltar.',
   })
 }
 
