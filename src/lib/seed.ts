@@ -1,4 +1,5 @@
 import type { Member, Presence, Service, ServiceSong, Song } from './types'
+import { phoneKey } from './phone'
 
 const DAY = 86400000
 
@@ -116,6 +117,21 @@ export const seedMembers: Member[] = [
 ]
 
 const now = new Date().toISOString()
+
+/**
+ * A lista de integrantes salva neste aparelho é só a de **exemplo** (o seed)
+ * ou são os dados reais que vieram do servidor?
+ *
+ * Serve de trava: com o servidor fora do ar, só entra quem já tem os dados
+ * da equipe neste aparelho. Sem isso, alguém entraria com a lista de exemplo
+ * e acabaria mandando dados de demonstração para a escala da equipe.
+ */
+export function listaEhExemplo(members: Member[]): boolean {
+  if (!members.length) return true
+  const telefonesExemplo = new Set(seedMembers.map((m) => phoneKey(m.phone)))
+  // qualquer integrante com celular fora da lista de exemplo já é dado real
+  return members.every((m) => telefonesExemplo.has(phoneKey(m.phone)))
+}
 
 export const seedSongs: Song[] = [
   {

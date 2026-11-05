@@ -6,6 +6,7 @@ import { AuthContext } from './contexts'
 import type { AuthContextValue } from './contexts'
 import { hasToken, markOffline, markServerError, resumeSync, syncLogin, syncLogout, useSyncStatus } from '../lib/sync'
 import { phoneKey, samePhone } from '../lib/phone'
+import { listaEhExemplo } from '../lib/seed'
 
 /** Sessão salva antes da troca do login (e-mail → celular). */
 type StoredSession = SessionUser & { email?: string }
@@ -209,6 +210,15 @@ export function AuthProvider({
       // neste aparelho — o ministro entra e o app volta a sincronizar sozinho
       // quando o servidor voltar. A senha é livre; o que vale é o celular.
       if (remote.offline || remote.reason === 'erro') {
+        // com o servidor fora do ar só entra quem já tem os dados da equipe
+        // neste aparelho — senão entraria com a lista de exemplo e acabaria
+        // mandando dados de demonstração para a escala da equipe
+        if (remote.reason === 'erro' && listaEhExemplo(members)) {
+          const mensagem =
+            'O servidor está fora do ar e este aparelho ainda não tem os dados da equipe. Tente de novo quando o servidor voltar.'
+          setAuthError(mensagem)
+          return { ok: false, error: mensagem }
+        }
         const local = members.find((m) => samePhone(m.phone, key))
         if (!local) {
           const mensagem = remote.offline
@@ -269,8 +279,15 @@ export function AuthProvider({
         setAuthError(mensagem)
         return { ok: false, error: mensagem }
       }
-      // servidor fora do ar: entra com a lista salva no aparelho
+      // servidor fora do ar: entra com a lista salva no aparelho (só se ela
+      // for a lista real da equipe — a de exemplo não entra)
       if (remote.reason === 'erro') {
+        if (listaEhExemplo(members)) {
+          const mensagem =
+            'O servidor está fora do ar e este aparelho ainda não tem os dados da equipe. Tente de novo quando o servidor voltar.'
+          setAuthError(mensagem)
+          return { ok: false, error: mensagem }
+        }
         markServerError(
           'O servidor está com problema agora. Os dados ficarão só neste aparelho até o servidor voltar.',
         )
