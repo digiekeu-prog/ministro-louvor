@@ -16,6 +16,7 @@ import type { AppData, SyncChange, SyncOp } from './syncState'
 import type { Member } from './types'
 import { normalizeData } from './syncState'
 import { apiUrl } from './api'
+import { intervaloAgora, marcarAtividade, observarAtividade, vigiarAtividade } from './poll'
 
 export type SyncState =
   | 'desligado'
@@ -51,11 +52,19 @@ const TOKEN_KEY = 'worshipflow:token'
 const SEQ_KEY = 'worshipflow:seq'
 const PENDING_KEY = 'worshipflow:pending'
 
-/** De quanto em quanto tempo perguntamos o que há de novo (ms). */
+/**
+ * De quanto em quanto tempo perguntamos o que há de novo **enquanto o app está
+ * em uso** (ms). Parado ou em segundo plano o ritmo cai (ver `src/lib/poll.ts`):
+ * cada pergunta acorda o banco e queima cota do Neon.
+ */
 const POLL_INTERVAL = 4000
 
 /** Quantas vezes tentamos antes de considerar "sem internet". */
 const MAX_RETRIES = 3
+
+/** Espera máxima entre duas tentativas depois de um erro (ms). */
+const MAX_ATRASO_REDE = 60000
+const MAX_ATRASO_SERVIDOR = 300000
 
 let status: SyncStatus = {
   // começa "conectando": assim que o app abre, o selo já mostra que ele está
@@ -74,6 +83,12 @@ let handlers: SyncHandlers | null = null
 let timer: number | null = null
 let running = false
 let failures = 0
+/** O motor está ligado? */
+let ligado = false
+/** Desliga os ouvintes de tela/atividade. */
+let desmontar: (() => void) | null = null
+/** Espera extra depois de um erro — evita martelar o servidor. */
+let atrasoErro = 0
 
 const listeners = new Set<() => void>()
 
@@ -278,6 +293,7 @@ async function tick() {
     await flush()
     await pull()
     failures = 0
+    atrasoErro = 0
     setStatus({
       state: 'sincronizado',
       lastSyncAt: Date.now(),
@@ -315,6 +331,7 @@ async function tick() {
       // mesma fila para sempre — ela fica guardada no aparelho.
       pending = []
       writeStored(PENDING_KEY, pending)
+      atrasoErro = 0
       setStatus({ state: 'erro', message: mensagem, pending: 0 })
       return
     }
@@ -324,12 +341,19 @@ async function tick() {
       // tira da fila essa operação e segue com as demais
       pending = pending.filter((op) => op.op !== 'reset')
       writeStored(PENDING_KEY, pending)
+      atrasoErro = 0
       setStatus({ state: 'erro', message: mensagem, pending: pending.length })
       return
     }
 
     // erro de rede (fetch quebrou) = sem internet; resposta HTTP = erro do servidor
     const semConexao = !(error instanceof SyncError)
+
+    // não martela o servidor: depois de um erro a espera dobra (até o limite).
+    // Erro do servidor (5xx) é o caso grave — cada tentativa acorda o banco.
+    const limite = semConexao ? MAX_ATRASO_REDE : MAX_ATRASO_SERVIDOR
+    atrasoErro = Math.min(atrasoErro ? atrasoErro * 2 : 15000, limite)
+
     setStatus({
       state: semConexao
         ? failures >= MAX_RETRIES
@@ -354,6 +378,8 @@ export function queueOps(ops: SyncOp[]) {
   pending = [...pending, ...ops]
   writeStored(PENDING_KEY, pending)
   setStatus({ pending: pending.length })
+  // o app está em uso: acelera o ritmo das consultas por um tempo
+  marcarAtividade()
   void tick()
 }
 
@@ -372,6 +398,20 @@ export function markOffline(message?: string) {
 }
 
 /**
+ * Marca que o servidor respondeu, mas com erro (5xx, banco fora do ar, cota
+ * do Neon esgotada). Não é falta de internet — a distinction importa para o
+ * aviso que o usuário vê na tela.
+ */
+export function markServerError(message?: string) {
+  setStatus({
+    state: 'erro',
+    message:
+      message ??
+      'O servidor está com problema agora. As alterações ficam guardadas neste aparelho e vão assim que ele voltar.',
+  })
+}
+
+/**
  * Envia o estado inteiro deste aparelho.
  *
  * Só é usado na **primeira configuração** (quando o servidor ainda tem
@@ -384,20 +424,70 @@ export function queueFullState(data: AppData) {
 
 /* --------------------------------- ciclo ---------------------------------- */
 
-function start() {
-  if (typeof window === 'undefined') return
-  if (timer === null) {
-    timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void tick()
-    }, POLL_INTERVAL)
+/**
+ * Agenda a próxima rodada.
+ *
+ * O ritmo se ajusta ao uso: rápido enquanto a pessoa mexe no app, mais
+ * devagar com o app parado e bem devagar em segundo plano (para o banco
+ * poder suspender e não queimar cota).
+ */
+function agendar() {
+  if (!ligado || typeof window === 'undefined') return
+  if (timer !== null) window.clearTimeout(timer)
+  const espera = atrasoErro || intervaloAgora(POLL_INTERVAL)
+  timer = window.setTimeout(async () => {
+    timer = null
+    await tick()
+    agendar()
+  }, espera)
+}
+
+/** A tela voltou a ficar visível (ou a pessoa mexeu): pergunta na hora. */
+function acorda() {
+  if (!ligado) return
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+  if (timer !== null) {
+    window.clearTimeout(timer)
+    timer = null
   }
-  void tick()
+  void tick().finally(() => agendar())
+}
+
+function start() {
+  if (typeof window === 'undefined' || ligado) return
+  ligado = true
+
+  const aoVoltar = () => {
+    if (document.visibilityState !== 'visible') return
+    marcarAtividade()
+    acorda()
+  }
+  const aoMexer = () => acorda()
+  const pararVigia = vigiarAtividade()
+  const pararObservador = observarAtividade(aoMexer)
+
+  document.addEventListener('visibilitychange', aoVoltar)
+  window.addEventListener('focus', aoVoltar)
+
+  desmontar = () => {
+    document.removeEventListener('visibilitychange', aoVoltar)
+    window.removeEventListener('focus', aoVoltar)
+    pararVigia()
+    pararObservador()
+  }
+
+  void tick().finally(() => agendar())
 }
 
 function stop() {
+  ligado = false
   if (timer !== null) {
-    window.clearInterval(timer)
+    window.clearTimeout(timer)
     timer = null
+  }
+  if (desmontar) {
+    desmontar()
+    desmontar = null
   }
 }
 

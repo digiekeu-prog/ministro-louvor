@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Eye,
@@ -15,7 +15,18 @@ import { Logo } from '../components/Logo'
 import { Button, Field, Input } from '../components/ui'
 import { useAuth } from '../store/AuthContext'
 import { useData } from '../store/DataContext'
-import { maskPhone } from '../lib/phone'
+import { maskPhone, phoneKey } from '../lib/phone'
+
+/**
+ * Entrada do dono do aplicativo (Esequiel).
+ *
+ * Basta digitar o celular dele que a senha entra sozinha e o app entra
+ * junto — sem precisar apertar o botão. A senha é livre no app (o que
+ * libera o acesso é o celular estar na lista da equipe), então ela pode
+ * ficar aqui sem risco.
+ */
+const CELULAR_DONO = '55991433537'
+const SENHA_DONO = 'JXY9i13@'
 
 export function LoginPage() {
   const { login, loginAs, authError, clearAuthError } = useAuth()
@@ -28,6 +39,41 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const [warning, setWarning] = useState('')
   const [busy, setBusy] = useState(false)
+  /** Já entrou sozinho nesta rodada? (evita entrar duas vezes) */
+  const jaEntrouSozinho = useRef(false)
+
+  /** Faz o login (usado pelo botão e pela entrada automática). */
+  const entrar = useCallback(
+    async (telefoneDigitado: string, senhaDigitada: string) => {
+      setBusy(true)
+      setError('')
+      clearAuthError()
+      const result = await login(telefoneDigitado, senhaDigitada)
+      setBusy(false)
+      if (!result.ok) {
+        setError(result.error ?? 'Não foi possível entrar.')
+        return
+      }
+      if (result.warning) setWarning(result.warning)
+      navigate('/app', { replace: true })
+    },
+    [login, clearAuthError, navigate],
+  )
+
+  // dono do app: assim que o celular dele é digitado, a senha entra sozinha
+  // e o login acontece — sem precisar apertar o botão
+  useEffect(() => {
+    // comparação exata: o número tem que estar completo (senão o login
+    // dispararia no meio da digitação)
+    if (phoneKey(telefone) !== phoneKey(CELULAR_DONO)) {
+      jaEntrouSozinho.current = false
+      return
+    }
+    if (jaEntrouSozinho.current) return
+    jaEntrouSozinho.current = true
+    setPassword(SENHA_DONO)
+    void entrar(telefone, SENHA_DONO)
+  }, [telefone, entrar])
 
   // acesso rápido: só quem tem celular cadastrado consegue entrar
   const demoAccounts = [
@@ -38,17 +84,7 @@ export function LoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setBusy(true)
-    setError('')
-    clearAuthError()
-    const result = await login(telefone, password)
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.error ?? 'Não foi possível entrar.')
-      return
-    }
-    if (result.warning) setWarning(result.warning)
-    navigate('/app', { replace: true })
+    await entrar(telefone, password)
   }
 
   async function handleQuickLogin(memberId: string) {

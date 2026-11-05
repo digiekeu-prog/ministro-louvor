@@ -24,8 +24,9 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
 - `src/store/DataContext.tsx` — CRUD de serviços/membros/presenças. Cada alteração vira uma
   **operação** (`upsert`/`delete`/`reset`) e vai para a fila de sincronização.
 - `src/store/AuthContext.tsx` — sessão: o **celular precisa existir na lista do servidor**; a
-  senha é livre (simulação de UI). Sem internet, cai para a lista local.
-- `src/lib/sync.ts` — motor de sincronização: fila, polling (4s), token e status na tela.
+  senha é livre (simulação de UI). Sem internet (ou com a API em 5xx), cai para a lista local.
+- `src/lib/sync.ts` — motor de sincronização: fila, polling (adaptativo), token e status na tela.
+- `src/lib/poll.ts` — ritmo das consultas ao servidor (4s em uso, 60s parado, 10min em segundo plano).
 - `src/lib/syncState.ts` — tipos e a lógica de merge das operações (usada pelo app e pelo servidor).
 - `api/_lib/app.ts` — as regras do servidor (login/pull/push e permissões).
 - `api/_lib/postgres.ts` — acesso ao Postgres (Neon) e criação das tabelas.
@@ -130,9 +131,20 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
   Neon** (plano free). O banco responde `402: Your account or project has exceeded the quota` e o
   app fica "só neste aparelho" até a cota ser renovada (reset mensal) ou o plano ser atualizado
   (Vercel → Storage → integração Neon → upgrade, ou console.neon.tech). Os dados continuam no
-  banco — nada é apagado. Como o app consulta o servidor a cada 4s, o compute do Neon fica sempre
-  ligado e queima a cota mensal rápido: para poupar, increase o intervalo do polling ou use um
-  plano pago.
+  banco — nada é apagado.
+- **Servidor fora do ar não tranca a porta**: quando a API responde 5xx (cota do Neon, banco fora),
+  o login **entra com a lista salva no aparelho** — a mesma regra do offline (o celular precisa
+  estar na lista). Um 5xx **não** encerra a sessão do ministro (só 403/404 de verdade encerram): o
+  `AuthContext` distingue "recusou" de "deu erro" (`remote.reason === 'erro'`).
+- **Entrada automática do dono**: em `src/pages/Login.tsx`, `CELULAR_DONO`/`SENHA_DONO` — ao digitar
+  o celular do dono, a senha entra sozinha e o app entra junto. A senha é livre no app (o que
+  libera o acesso é o celular estar na lista da equipe), então ela pode ficar no front.
+- **Ritmo das consultas ao servidor** (`src/lib/poll.ts`): 4 s com o app em uso, 60 s com o app
+  parado (3 min sem mexer) e 10 min em segundo plano — cada consulta acorda o Neon e queima cota.
+  Depois de um erro a espera dobra (até 5 min) para não martelar o servidor. A página pública
+  (`/escala/:id`) usa o mesmo ritmo, com 8 s como base.
+- **O app volta a sincronizar sozinho** depois de uma queda: o retry do login (`AuthContext`) espera
+  15 s, 30 s, 1 min, 2 min… até 5 min; e a tela que volta a ficar visível pergunta na hora.
 
 ## Antes de commitar
 

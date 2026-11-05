@@ -24,6 +24,12 @@ import type { Category, ServiceSong } from '../lib/types'
 import { CATEGORY_LABEL, STATUS_LABEL } from '../lib/types'
 import { SOURCE_STYLE, describeMedia } from '../lib/mediaLinks'
 import { apiUrl } from '../lib/api'
+import {
+  intervaloAgora,
+  marcarAtividade,
+  observarAtividade,
+  vigiarAtividade,
+} from '../lib/poll'
 import { cn, formatDateLong, formatarPrazo, formatTime } from '../lib/utils'
 
 interface EquipeItem {
@@ -144,20 +150,45 @@ export function EscalaPublicaPage() {
     return () => window.clearTimeout(timer)
   }, [carregar])
 
-  // atualização automática: de tempos em tempos e quando o celular volta pra tela
+  // atualização automática: de tempos em tempos e quando o celular volta pra
+  // tela. O ritmo acompanha o uso (ver `src/lib/poll.ts`): rápido com a tela
+  // na frente, devagar com a página parada e quase parado em segundo plano —
+  // cada consulta acorda o banco e queima cota do Neon.
   useEffect(() => {
-    const intervalo = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void carregar(true)
-    }, INTERVALO_ATUALIZACAO)
+    let timer: number | null = null
+
+    const agendar = () => {
+      if (timer !== null) window.clearTimeout(timer)
+      timer = window.setTimeout(async () => {
+        timer = null
+        await carregar(true)
+        agendar()
+      }, intervaloAgora(INTERVALO_ATUALIZACAO))
+    }
 
     const aoVoltar = () => {
-      if (document.visibilityState === 'visible') void carregar(true)
+      if (document.visibilityState !== 'visible') return
+      marcarAtividade()
+      if (timer !== null) {
+        window.clearTimeout(timer)
+        timer = null
+      }
+      void carregar(true).finally(() => agendar())
     }
+
+    // a pessoa mexendo na página (abrindo uma música, procurando o nome)
+    // mantém o ritmo rápido
+    const pararObservador = observarAtividade(() => agendar())
+    const pararVigia = vigiarAtividade()
+
     document.addEventListener('visibilitychange', aoVoltar)
+    agendar()
 
     return () => {
-      window.clearInterval(intervalo)
+      if (timer !== null) window.clearTimeout(timer)
       document.removeEventListener('visibilitychange', aoVoltar)
+      pararObservador()
+      pararVigia()
     }
   }, [carregar])
 

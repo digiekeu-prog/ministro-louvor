@@ -52,7 +52,8 @@ Vercel.
   **operação** (`upsert`/`delete`/`reset`) e vai para a fila de sincronização.
 - `src/store/AuthContext.tsx` — sessão: o **celular precisa existir na lista do servidor**; a
   senha é livre (simulação de UI). Sem internet, cai para a lista local.
-- `src/lib/sync.ts` — motor de sincronização: fila, polling (4s), token e status na tela.
+- `src/lib/sync.ts` — motor de sincronização: fila, polling (adaptativo), token e status na tela.
+- `src/lib/poll.ts` — ritmo das consultas ao servidor (4s em uso, 60s parado, 10min em segundo plano).
 - `src/lib/syncState.ts` — tipos e a lógica de merge das operações (usada pelo app e pelo servidor).
 - `src/lib/api.ts` — `API_BASE` (`VITE_API_URL`) e o fetch da API.
 - `api/_lib/app.ts` — as regras do servidor (login/pull/push, permissões e a escala pública).
@@ -120,8 +121,14 @@ Vercel.
   criar arquivo de config do Tailwind.
 - **A página pública (`/escala/:id`) se atualiza sozinha** (8s + quando a tela volta a ficar
   visível). Sem isso, o integrante que abriu o link no celular achava que a nuvem não funcionava.
-- **Se o aparelho entrou sem internet, ele volta a sincronizar sozinho** (nova tentativa a cada
-  15s em `AuthContext`).
+- **Ritmo das consultas ao servidor** (`src/lib/poll.ts`): 4 s com o app em uso, 60 s com o app
+  parado (3 min sem mexer) e 10 min em segundo plano — cada consulta acorda o Neon e queima cota.
+  Depois de um erro a espera dobra (até 5 min). A página pública usa o mesmo ritmo (base de 8 s).
+- **Se o aparelho entrou sem internet, ele volta a sincronizar sozinho** (retry em `AuthContext`:
+  15s, 30s, 1min, 2min… até 5min).
+- **Servidor fora do ar não tranca a porta**: um 5xx no login (cota do Neon, banco fora) entra com a
+  lista salva no aparelho, como no offline — e **não** encerra a sessão do ministro (só 403/404
+  de verdade encerram).
 - **Idioma da UI e dos comentários: português do Brasil.**
 - **A mensagem do WhatsApp é curta de propósito** (pedido do usuário): só o culto, o local, o
   recado (observações) e o link público. **Nunca** mandar a lista da equipe nem o repertório no
