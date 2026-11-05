@@ -13,7 +13,6 @@ export const seedMembers: Member[] = [
   {
     id: 'mem_danilo',
     name: 'Danilo Moreira',
-    email: 'admin@worshipflow.app',
     phone: '(11) 98888-1200',
     category: 'admin',
     skills: ['Ministro', 'Teclado', 'Backing Vocal'],
@@ -24,7 +23,6 @@ export const seedMembers: Member[] = [
   {
     id: 'mem_renata',
     name: 'Renata Lima',
-    email: 'renata@worshipflow.app',
     phone: '(11) 97777-3412',
     category: 'vocal',
     skills: ['Backing Vocal', 'Coral'],
@@ -34,7 +32,6 @@ export const seedMembers: Member[] = [
   {
     id: 'mem_wesley',
     name: 'Wesley Prado',
-    email: 'wesley@worshipflow.app',
     phone: '(11) 96666-7788',
     category: 'instrumentista',
     skills: ['Teclado'],
@@ -44,7 +41,6 @@ export const seedMembers: Member[] = [
   {
     id: 'mem_joao',
     name: 'João Pedro Alves',
-    email: 'joao@worshipflow.app',
     phone: '(11) 95555-9012',
     category: 'instrumentista',
     skills: ['Guitarra', 'Violão'],
@@ -54,7 +50,6 @@ export const seedMembers: Member[] = [
   {
     id: 'mem_camila',
     name: 'Camila Ferreira',
-    email: 'camila@worshipflow.app',
     phone: '(11) 94444-2255',
     category: 'instrumentista',
     skills: ['Violão'],
@@ -64,7 +59,6 @@ export const seedMembers: Member[] = [
   {
     id: 'mem_marcos',
     name: 'Marcos Vinícius',
-    email: 'marcos@worshipflow.app',
     phone: '(11) 93333-8811',
     category: 'instrumentista',
     skills: ['Baixo'],
@@ -74,7 +68,6 @@ export const seedMembers: Member[] = [
   {
     id: 'mem_thiago',
     name: 'Thiago Ribeiro',
-    email: 'thiago@worshipflow.app',
     phone: '(11) 92222-5500',
     category: 'instrumentista',
     skills: ['Bateria', 'Percussão'],
@@ -84,7 +77,6 @@ export const seedMembers: Member[] = [
   {
     id: 'mem_paula',
     name: 'Paula Mendes',
-    email: 'paula@worshipflow.app',
     phone: '(11) 91111-4433',
     category: 'vocal',
     skills: ['Backing Vocal', 'Vocal Solo'],
@@ -94,7 +86,6 @@ export const seedMembers: Member[] = [
   {
     id: 'mem_yuri',
     name: 'Yuri Santos',
-    email: 'yuri@worshipflow.app',
     phone: '(11) 90000-7781',
     category: 'vocal',
     skills: ['Coral', 'Backing Vocal'],
@@ -104,7 +95,6 @@ export const seedMembers: Member[] = [
   {
     id: 'mem_lucas',
     name: 'Lucas Andrade',
-    email: 'lucas@worshipflow.app',
     phone: '(11) 98888-0099',
     category: 'instrumentista',
     skills: ['Cajón', 'Percussão'],
@@ -116,7 +106,6 @@ export const seedMembers: Member[] = [
     id: 'mem_rafael',
     name: 'Rafael Nunes',
     // Equipe técnica: sem e-mail — só visualiza a escala pelo link público.
-    email: '',
     phone: '(11) 98888-4421',
     category: 'tecnica',
     skills: ['Mesa de som', 'Projeção'],

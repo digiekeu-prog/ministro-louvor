@@ -1,12 +1,22 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { KeyRound, LogOut, MessageCircle, RefreshCcw, ShieldCheck, Sparkles } from 'lucide-react'
+import {
+  KeyRound,
+  Link2,
+  LogOut,
+  MessageCircle,
+  RefreshCcw,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react'
 import { PageTitle } from '../components/AppShell'
 import { Logo } from '../components/Logo'
 import { Avatar, Badge, Button, Card, Field, Input } from '../components/ui'
 import { useAuth } from '../store/AuthContext'
 import { useData } from '../store/DataContext'
 import { CATEGORY_SINGULAR } from '../lib/types'
+import { formatPhone } from '../lib/phone'
+import { APP_URL } from '../lib/whatsapp'
 
 export function PerfilPage() {
   const { user, isAdmin, logout } = useAuth()
@@ -35,6 +45,15 @@ export function PerfilPage() {
         ? 'WhatsApp salvo. Agora a escala abre direto no seu WhatsApp.'
         : 'WhatsApp removido. Você ainda pode copiar a mensagem.',
     )
+  }
+
+  async function handleCopiarLink() {
+    try {
+      await navigator.clipboard.writeText(APP_URL)
+      setMessage('Link do aplicativo copiado!')
+    } catch {
+      setMessage('Copie o endereço que está no campo acima.')
+    }
   }
 
   function handlePassword() {
@@ -74,7 +93,9 @@ export function PerfilPage() {
               <Avatar name={user.name} hue={user.hue} size={76} ring />
               <div className="min-w-0 flex-1">
                 <h2 className="font-display text-xl font-bold text-white">{user.name}</h2>
-                <p className="text-sm text-zinc-400">{user.email}</p>
+                <p className="text-sm text-zinc-400">
+                  {user.phone ? formatPhone(user.phone) : 'Sem celular no cadastro'}
+                </p>
                 <div className="mt-2 flex flex-wrap justify-center gap-2 sm:justify-start">
                   <Badge
                     tone={
@@ -157,6 +178,40 @@ export function PerfilPage() {
                   <MessageCircle size={15} /> Salvar WhatsApp
                 </Button>
               </div>
+            </div>
+          </Card>
+
+          {/* Link de acesso */}
+          <Card>
+            <div className="border-b border-white/8 px-5 py-4 sm:px-6">
+              <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-white">
+                <Link2 size={18} className="text-neon-cyan" />
+                Link de acesso
+              </h2>
+              <p className="mt-0.5 text-sm text-zinc-400">
+                É este endereço que os ministros abrem no celular para entrar e continuar editando
+                a escala de onde pararam.
+              </p>
+            </div>
+            <div className="grid gap-4 p-5 sm:p-6">
+              <Field label="Endereço do aplicativo">
+                <Input
+                  value={APP_URL}
+                  readOnly
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="text-xs"
+                />
+              </Field>
+              <div>
+                <Button variant="secondary" onClick={() => void handleCopiarLink()}>
+                  <Link2 size={15} /> Copiar link
+                </Button>
+              </div>
+              <p className="text-xs leading-relaxed text-zinc-500">
+                No celular, cada um entra com o <strong>celular</strong> cadastrado no app. Já
+                cada escala tem o seu próprio link — é o que vai na mensagem do WhatsApp para os
+                músicos.
+              </p>
             </div>
           </Card>
 

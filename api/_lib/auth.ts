@@ -1,5 +1,7 @@
 /**
- * Sessão simples da equipe: token assinado (HMAC) com o e-mail de quem entrou.
+ * Sessão simples da equipe: token assinado (HMAC) com o **id** de quem entrou
+ * (o login é pelo celular, mas o token leva o id — assim ele continua valendo
+ * mesmo se oministero trocar o número depois).
  *
  * O segredo fica no próprio banco (tabela wf_meta), então não precisa de
  * variável de ambiente extra e continua válido depois de um novo deploy.
@@ -12,7 +14,12 @@ import type { Store } from './store.ts'
 const TOKEN_TTL = 1000 * 60 * 60 * 24 * 30
 
 export interface TokenPayload {
-  email: string
+  /** Id do integrante que entrou. */
+  id: string
+  /** Celular usado para entrar (o id manda; o telefone fica para o log). */
+  phone?: string
+  /** Sessões antigas (login por e-mail) ainda podem aparecer. */
+  email?: string
   exp: number
 }
 
@@ -25,10 +32,14 @@ export async function getSecret(store: Store): Promise<string> {
   return (await store.meta('secret')) ?? secret
 }
 
-/** Gera um token para o e-mail informado. */
-export function signToken(secret: string, email: string): string {
+/** Gera um token para o integrante informado. */
+export function signToken(
+  secret: string,
+  member: { id: string; phone?: string },
+): string {
   const payload: TokenPayload = {
-    email: email.trim().toLowerCase(),
+    id: member.id,
+    phone: member.phone,
     exp: Date.now() + TOKEN_TTL,
   }
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
@@ -53,7 +64,9 @@ export function verifyToken(
 
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as TokenPayload
-    if (typeof payload.email !== 'string' || typeof payload.exp !== 'number') return null
+    if (typeof payload.exp !== 'number') return null
+    // token novo: tem o id do integrante. Token antigo: traz o e-mail.
+    if (typeof payload.id !== 'string' && typeof payload.email !== 'string') return null
     if (payload.exp < Date.now()) return null
     return payload
   } catch {

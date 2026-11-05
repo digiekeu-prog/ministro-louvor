@@ -5,19 +5,14 @@ import { SyncBadge } from '../components/SyncStatus'
 import { Avatar, Badge, Button, Card, EmptyState, Field, Input, Modal, Segmented, Select } from '../components/ui'
 import { useData } from '../store/DataContext'
 import type { Member, MemberCategory } from '../lib/types'
-import {
-  CATEGORY_SINGULAR,
-  INSTRUMENT_FUNCTIONS,
-  TECHNICAL_FUNCTIONS,
-  VOCAL_FUNCTIONS,
-} from '../lib/types'
+import { CATEGORY_SINGULAR, INSTRUMENT_FUNCTIONS, TECHNICAL_FUNCTIONS, VOCAL_FUNCTIONS } from '../lib/types'
+import { formatPhone, maskPhone } from '../lib/phone'
 import { cn } from '../lib/utils'
 
 type Filter = 'todos' | 'instrumentista' | 'vocal' | 'tecnica' | 'admin'
 
 const EMPTY_FORM = {
   name: '',
-  email: '',
   phone: '',
   category: 'instrumentista' as MemberCategory,
   skills: [] as string[],
@@ -46,7 +41,6 @@ export function EquipePage() {
         const matchesQuery =
           !query.trim() ||
           m.name.toLowerCase().includes(query.toLowerCase()) ||
-          (m.email ?? '').toLowerCase().includes(query.toLowerCase()) ||
           (m.phone ?? '').toLowerCase().includes(query.toLowerCase()) ||
           m.skills.some((s) => s.toLowerCase().includes(query.toLowerCase()))
         return matchesCategory && matchesQuery
@@ -64,7 +58,6 @@ export function EquipePage() {
     setEditingId(member.id)
     setForm({
       name: member.name,
-      email: member.email,
       phone: member.phone ?? '',
       category: member.category,
       skills: member.skills,
@@ -78,8 +71,7 @@ export function EquipePage() {
 
     const payload = {
       name: form.name.trim(),
-      // e-mail é opcional: quem não usa e-mail só vai visualizar a escala
-      email: form.email.trim(),
+      // celular é o login: quem não tem celular só vai visualizar a escala
       phone: form.phone.trim() || undefined,
       category: form.category,
       skills: form.skills.length
@@ -218,7 +210,7 @@ export function EquipePage() {
                     {!member.active && <Badge tone="red">Inativo</Badge>}
                   </div>
                   <p className="truncate text-xs text-zinc-500">
-                    {member.email || member.phone || 'Só visualiza (sem e-mail)'}
+                    {member.phone ? formatPhone(member.phone) : 'Só visualiza (sem celular)'}
                   </p>
                   <div className="mt-2">
                     <Badge
@@ -302,26 +294,20 @@ export function EquipePage() {
             />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label="E-mail (opcional)"
-              hint="Só quem vai entrar no app precisa de e-mail. Sem ele, a pessoa recebe a escala pelo link do WhatsApp."
-            >
-              <Input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                placeholder="nome@igreja.com"
-              />
-            </Field>
-            <Field label="Telefone">
-              <Input
-                value={form.phone}
-                onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                placeholder="(00) 00000-0000"
-              />
-            </Field>
-          </div>
+          <Field
+            label="Celular"
+            hint="É com este número que a pessoa entra no app. Sem celular, ela só recebe a escala pelo link do WhatsApp."
+          >
+            <Input
+              type="tel"
+              inputMode="tel"
+              value={form.phone}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, phone: maskPhone(e.target.value) }))
+              }
+              placeholder="(00) 00000-0000"
+            />
+          </Field>
 
           <Field label="Categoria">
             <Select

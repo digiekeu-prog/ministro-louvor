@@ -35,15 +35,15 @@ export interface DataContextValue {
 }
 
 export interface AuthContextValue {
-  session: { id: string; email: string } | null
+  session: { id: string; phone: string } | null
   user: Member | null
   isAdmin: boolean
   /** Mensagem que explica por que o acesso foi recusado (tela de login). */
   authError: string | null
-  /** Limpa a mensagem de erro (quando a pessoa corrige o e-mail). */
+  /** Limpa a mensagem de erro (quando a pessoa corrige o celular). */
   clearAuthError: () => void
   login: (
-    email: string,
+    phone: string,
     password: string,
   ) => Promise<{ ok: boolean; error?: string; warning?: string }>
   loginAs: (memberId: string) => Promise<{ ok: boolean; error?: string }>

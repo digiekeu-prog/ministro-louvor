@@ -152,27 +152,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 /* ---------------------------------- login ---------------------------------- */
 
 /**
- * Pede um token ao servidor para o e-mail informado.
+ * Pede um token ao servidor para o celular informado.
  *
  * Devolve { ok: false, reason: 'sem_conexao' } quando o servidor não pode
  * ser alcançado (aí o app entra no modo local) e { ok: false } com o
  * motivo (`desconhecido`, `inativo` ou `erro`) quando o servidor recusou
- * o e-mail.
+ * o celular.
  */
-export async function syncLogin(email: string): Promise<{
+export async function syncLogin(phone: string): Promise<{
   ok: boolean
   error?: string
   offline?: boolean
   reason?: LoginFailure
-  user?: { id: string; name: string; email: string; category: Member['category'] }
+  user?: { id: string; name: string; phone: string; category: Member['category'] }
 }> {
   try {
     const data = await request<{
       token: string
-      user?: { id: string; name: string; email: string; category: Member['category'] }
+      user?: { id: string; name: string; phone: string; category: Member['category'] }
     }>('/login', {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ phone }),
     })
     token = data.token
     writeStored(TOKEN_KEY, token)

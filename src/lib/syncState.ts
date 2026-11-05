@@ -11,6 +11,7 @@
  */
 
 import type { Member, Presence, Service, Song } from './types'
+import { samePhone } from './phone.ts'
 
 /** Coleções que são compartilhadas entre todos os aparelhos. */
 export type Collection = 'members' | 'services' | 'songs' | 'presence'
@@ -151,10 +152,22 @@ export function stateFromChanges(changes: SyncChange[]): AppData {
   return applyOps(EMPTY_DATA, changes.map(changeToOp))
 }
 
-/** Procura um membro pelo e-mail (sem diferenciar maiúsculas/minúsculas). */
-export function findMemberByEmail(data: AppData, email: string): Member | undefined {
+/** Procura um membro pelo celular (a máscara e o código do país não importam). */
+export function findMemberByPhone(data: AppData, phone: string): Member | undefined {
+  return data.members.find((member) => samePhone(member.phone, phone))
+}
+
+/**
+ * Procura pelo **e-mail antigo** (versões anteriores do app usavam e-mail para
+ * entrar). Só serve para a transição: as telas novas já não cadastram e-mail.
+ */
+export function findMemberByLegacyEmail(data: AppData, email: string): Member | undefined {
   const normalized = email.trim().toLowerCase()
-  return data.members.find((member) => member.email.trim().toLowerCase() === normalized)
+  if (!normalized) return undefined
+  return data.members.find((member) => {
+    const antigo = (member as Member & { email?: string }).email ?? ''
+    return antigo.trim().toLowerCase() === normalized
+  })
 }
 
 /** Monta a operação de criação/edição de um item. */

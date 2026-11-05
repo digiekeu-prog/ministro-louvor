@@ -1,8 +1,8 @@
 /**
  * POST /api/login
  *
- * Confere o e-mail contra a lista de membros que está no banco compartilhado
- * e devolve um token de sessão (assinado no servidor).
+ * Confere o **celular** contra a lista de membros que está no banco
+ * compartilhado e devolve um token de sessão (assinado no servidor).
  */
 
 import { handleLogin } from './_lib/app.ts'
@@ -19,7 +19,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   try {
-    const body = await readBody<{ email?: string; password?: string }>(req)
+    const body = await readBody<{ phone?: string; password?: string; email?: string }>(req)
     const result = await handleLogin(createPostgresStore(), body)
     res.setHeader('Cache-Control', 'no-store')
     res.status(result.status).json(result.body)

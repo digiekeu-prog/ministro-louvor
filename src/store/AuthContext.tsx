@@ -1,18 +1,20 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Member } from '../lib/types'
+import type { Member, SessionUser } from '../lib/types'
 import { STORAGE_KEYS, readStore, removeStore, writeStore } from '../lib/storage'
 import { AuthContext } from './contexts'
 import type { AuthContextValue } from './contexts'
 import { hasToken, markOffline, resumeSync, syncLogin, syncLogout, useSyncStatus } from '../lib/sync'
+import { phoneKey, samePhone } from '../lib/phone'
 
-type SessionUser = { id: string; email: string; name?: string; category?: Member['category'] }
+/** Sessão salva antes da troca do login (e-mail → celular). */
+type StoredSession = SessionUser & { email?: string }
 
 /** Mensagem que explica, em português, por que o acesso foi recusado. */
 function mensagemDeRecusa(reason?: string, fallback?: string): string {
   switch (reason) {
     case 'desconhecido':
-      return 'Este e-mail não está mais na lista da equipe do servidor. Fale com o ministro para voltar a ter acesso.'
+      return 'Este celular não está mais na lista da equipe do servidor. Fale com o ministro para voltar a ter acesso.'
     case 'inativo':
       return 'Esta conta está inativa. Fale com o ministro para reativar o acesso.'
     case 'sem_conexao':
@@ -20,6 +22,16 @@ function mensagemDeRecusa(reason?: string, fallback?: string): string {
     default:
       return fallback ?? 'Não foi possível entrar.'
   }
+}
+
+/** Procura um integrante pelo e-mail antigo (dados salvos antes da troca). */
+function membroComEmailAntigo(members: Member[], email: string): Member | undefined {
+  const normalized = email.trim().toLowerCase()
+  if (!normalized) return undefined
+  return members.find((member) => {
+    const antigo = (member as Member & { email?: string }).email ?? ''
+    return antigo.trim().toLowerCase() === normalized
+  })
 }
 
 /**
@@ -36,19 +48,20 @@ export function AuthProvider({
   children: ReactNode
   members: Member[]
 }) {
-  const [session, setSession] = useState<SessionUser | null>(() =>
-    readStore<SessionUser | null>(STORAGE_KEYS.session, null),
-  )
-  /** aviso mostrado na tela de login (ex.: acesso removido da lista da equipe) */
+  const [session, setSession] = useState<SessionUser | null>(() => {
+    const saved = readStore<StoredSession | null>(STORAGE_KEYS.session, null)
+    if (!saved) return null
+    return {
+      id: saved.id,
+      phone: saved.phone ?? '',
+      name: saved.name,
+      category: saved.category,
+    }
+  })
   const [authError, setAuthError] = useState<string | null>(null)
   const status = useSyncStatus()
 
-  useEffect(() => {
-    if (session) writeStore(STORAGE_KEYS.session, session)
-    else removeStore(STORAGE_KEYS.session)
-  }, [session])
-
-  // o servidor recusou a sessão (o e-mail saiu da lista da equipe ou o token
+  // o servidor recusou a sessão (o celular saiu da lista da equipe ou o token
   // venceu): encerra a sessão local e explica o motivo na tela de login
   useEffect(() => {
     if (status.state !== 'sem_acesso') return
@@ -59,9 +72,35 @@ export function AuthProvider({
     )
   }, [status.state, status.message])
 
+  // Sessão salva antes da troca do login (e-mail → celular): troca o e-mail
+  // antigo pelo celular do cadastro, para ninguém ser desconectado na hora.
+  const sessao = useMemo<SessionUser | null>(() => {
+    if (!session) return null
+    if (session.phone) return session
+    const antigo = (session as StoredSession).email ?? ''
+    const member = membroComEmailAntigo(members, antigo)
+    if (!member?.phone) return null
+    return {
+      id: member.id,
+      phone: member.phone,
+      name: member.name,
+      category: member.category,
+    }
+  }, [session, members])
+
+  /** A sessão antiga existia, mas não dá mais para entrar com ela. */
+  const erroDeSessao =
+    session && !sessao ? 'Seu acesso mudou: entre agora com o seu celular.' : null
+
+  // guarda a sessão (já no formato novo: celular)
+  useEffect(() => {
+    if (sessao) writeStore(STORAGE_KEYS.session, sessao)
+    else removeStore(STORAGE_KEYS.session)
+  }, [sessao])
+
   // já existe sessão salva? então volta a sincronizar com a nuvem
   useEffect(() => {
-    if (!session) return
+    if (!sessao?.phone) return
     if (hasToken()) {
       resumeSync()
       return
@@ -74,7 +113,7 @@ export function AuthProvider({
 
     const tentarToken = () => {
       if (cancelado || hasToken()) return
-      void syncLogin(session.email).then((result) => {
+      void syncLogin(sessao.phone).then((result) => {
         if (cancelado) return
         if (result.ok) return
         if (result.offline) {
@@ -97,36 +136,36 @@ export function AuthProvider({
       cancelado = true
       window.clearInterval(intervalo)
     }
-  }, [session])
+  }, [sessao])
 
   const user = useMemo(() => {
-    if (!session) return null
-    const found = members.find((m) => m.id === session.id)
+    if (!sessao) return null
+    const found = members.find((m) => m.id === sessao.id)
     if (found) return found
     // a lista local ainda não recebeu o membro (acabou de entrar em outro
     // aparelho): usa os dados que o servidor devolveu
-    if (session.name) {
+    if (sessao.name) {
       return {
-        id: session.id,
-        name: session.name,
-        email: session.email,
-        category: session.category ?? 'vocal',
+        id: sessao.id,
+        name: sessao.name,
+        phone: sessao.phone,
+        category: sessao.category ?? 'vocal',
         skills: [],
         hue: 190,
         active: true,
       } satisfies Member
     }
     return null
-  }, [session, members])
+  }, [sessao, members])
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      const normalized = email.trim().toLowerCase()
-      if (!normalized) return { ok: false, error: 'Informe o e-mail.' }
+    async (telefone: string, password: string) => {
+      const key = phoneKey(telefone)
+      if (!key) return { ok: false, error: 'Informe o celular.' }
       if (!password) return { ok: false, error: 'Informe a senha.' }
 
       // primeiro o servidor (a lista de membros compartilhada é a oficial)
-      const remote = await syncLogin(normalized)
+      const remote = await syncLogin(key)
 
       if (!remote.ok && !remote.offline) {
         const mensagem = mensagemDeRecusa(remote.reason, remote.error)
@@ -136,13 +175,13 @@ export function AuthProvider({
 
       // sem internet: vale a lista que está salva neste aparelho
       if (remote.offline) {
-        const local = members.find((m) => m.email.toLowerCase() === normalized)
-        if (!local) return { ok: false, error: 'Não encontramos uma conta com esse e-mail.' }
+        const local = members.find((m) => samePhone(m.phone, key))
+        if (!local) return { ok: false, error: 'Não encontramos uma conta com esse celular.' }
         if (!local.active) return { ok: false, error: 'Esta conta está inativa. Fale com o ministro.' }
         markOffline(
           'Sem conexão com o servidor. Os dados ficarão só neste aparelho até a internet voltar.',
         )
-        setSession({ id: local.id, email: local.email })
+        setSession({ id: local.id, phone: local.phone ?? key })
         setAuthError(null)
         return {
           ok: true,
@@ -152,8 +191,8 @@ export function AuthProvider({
 
       const info = remote.user
       setSession({
-        id: info?.id ?? normalized,
-        email: info?.email ?? normalized,
+        id: info?.id ?? key,
+        phone: info?.phone ?? key,
         name: info?.name,
         category: info?.category,
       })
@@ -167,7 +206,10 @@ export function AuthProvider({
     async (memberId: string) => {
       const member = members.find((m) => m.id === memberId)
       if (!member) return { ok: false, error: 'Integrante não encontrado.' }
-      const remote = await syncLogin(member.email)
+      if (!member.phone) {
+        return { ok: false, error: 'Este integrante ainda não tem celular cadastrado.' }
+      }
+      const remote = await syncLogin(phoneKey(member.phone))
       if (!remote.ok && !remote.offline) {
         const mensagem = mensagemDeRecusa(remote.reason, remote.error)
         setAuthError(mensagem)
@@ -175,7 +217,7 @@ export function AuthProvider({
       }
       setSession({
         id: member.id,
-        email: member.email,
+        phone: member.phone,
         name: member.name,
         category: member.category,
       })
@@ -195,16 +237,16 @@ export function AuthProvider({
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      session,
+      session: sessao,
       user,
       isAdmin: user?.category === 'admin',
-      authError,
+      authError: authError ?? erroDeSessao,
       clearAuthError,
       login,
       loginAs,
       logout,
     }),
-    [session, user, authError, clearAuthError, login, loginAs, logout],
+    [sessao, user, authError, erroDeSessao, clearAuthError, login, loginAs, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -1,27 +1,39 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Lock, LogIn, Mail, Music4, ShieldAlert, ShieldCheck, Users } from 'lucide-react'
+import {
+  Eye,
+  EyeOff,
+  Lock,
+  LogIn,
+  Music4,
+  ShieldAlert,
+  ShieldCheck,
+  Smartphone,
+  Users,
+} from 'lucide-react'
 import { Logo } from '../components/Logo'
 import { Button, Field, Input } from '../components/ui'
 import { useAuth } from '../store/AuthContext'
 import { useData } from '../store/DataContext'
+import { maskPhone } from '../lib/phone'
 
 export function LoginPage() {
   const { login, loginAs, authError, clearAuthError } = useAuth()
   const { members } = useData()
   const navigate = useNavigate()
 
-  const [email, setEmail] = useState('admin@worshipflow.app')
+  const [telefone, setTelefone] = useState('')
   const [password, setPassword] = useState('123456')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [warning, setWarning] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // acesso rápido: só quem tem celular cadastrado consegue entrar
   const demoAccounts = [
-    { member: members.find((m) => m.category === 'admin'), label: 'Ministro (Admin)' },
-    { member: members.find((m) => m.id === 'mem_wesley'), label: 'Instrumentista' },
-    { member: members.find((m) => m.id === 'mem_renata'), label: 'Vocal' },
+    { member: members.find((m) => m.category === 'admin' && m.phone), label: 'Ministro (Admin)' },
+    { member: members.find((m) => m.id === 'mem_wesley' && m.phone), label: 'Instrumentista' },
+    { member: members.find((m) => m.id === 'mem_renata' && m.phone), label: 'Vocal' },
   ].filter((a) => a.member)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -29,7 +41,7 @@ export function LoginPage() {
     setBusy(true)
     setError('')
     clearAuthError()
-    const result = await login(email, password)
+    const result = await login(telefone, password)
     setBusy(false)
     if (!result.ok) {
       setError(result.error ?? 'Não foi possível entrar.')
@@ -85,22 +97,23 @@ export function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <Field label="E-mail">
+            <Field label="Celular" hint="O mesmo número que está no cadastro da equipe.">
               <div className="relative">
-                <Mail
+                <Smartphone
                   size={16}
                   className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500"
                 />
                 <Input
-                  type="email"
-                  value={email}
+                  type="tel"
+                  inputMode="tel"
+                  value={telefone}
                   onChange={(e) => {
-                    setEmail(e.target.value)
+                    setTelefone(maskPhone(e.target.value))
                     setError('')
                   }}
-                  placeholder="voce@igreja.com"
+                  placeholder="(11) 99999-9999"
                   className="pl-10"
-                  autoComplete="email"
+                  autoComplete="tel"
                 />
               </div>
             </Field>
@@ -169,9 +182,9 @@ export function LoginPage() {
 
           <div className="mb-5 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-xs leading-relaxed text-zinc-400">
             <span className="font-semibold text-zinc-200">O acesso é só dos ministros.</span>{' '}
-            Os demais integrantes não precisam de e-mail nem de senha: o ministro manda no grupo
-            do WhatsApp o link da escala e cada um abre, digita o próprio nome e vê se está
-            escalado, com o vídeo, a letra e a cifra.
+            Os demais integrantes não precisam de cadastro: o ministro manda no grupo do WhatsApp
+            o link da escala e cada um abre, digita o próprio nome e vê se está escalado, com o
+            vídeo, a letra e a cifra.
           </div>
 
           <div className="space-y-2">

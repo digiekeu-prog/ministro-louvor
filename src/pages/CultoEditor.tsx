@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  ChevronUp,
   CircleAlert,
   ClipboardPaste,
   FileText,
@@ -62,7 +63,13 @@ function defaultSlots(category: Category): Slot[] {
       : category === 'vocal'
         ? VOCAL_FUNCTIONS
         : TECHNICAL_FUNCTIONS
-  const defaults = category === 'instrumentista' ? list.slice(0, 5) : list.slice(0, 2)
+  // A equipe técnica já começa com as vagas mais usadas (som, projeção e filmagem).
+  const defaults =
+    category === 'instrumentista'
+      ? list.slice(0, 5)
+      : category === 'vocal'
+        ? list.slice(0, 2)
+        : (['Mesa de som', 'Projeção', 'Filmagem'] as const)
   return defaults.map((functionName) => ({ id: uid('slot'), category, functionName }))
 }
 
@@ -188,6 +195,19 @@ export function CultoEditorPage() {
 
   function removeSong(index: number) {
     setSelectedSongs((prev) => prev.filter((_, i) => i !== index))
+    setSaved(false)
+  }
+
+  /** Move a música para cima ou para baixo (ordem do culto). */
+  function moveSong(index: number, delta: number) {
+    setSelectedSongs((prev) => {
+      const destino = index + delta
+      if (destino < 0 || destino >= prev.length) return prev
+      const copia = [...prev]
+      const [musica] = copia.splice(index, 1)
+      copia.splice(destino, 0, musica)
+      return copia
+    })
     setSaved(false)
   }
 
@@ -650,6 +670,26 @@ export function CultoEditorPage() {
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-neon-gold/12 text-xs font-bold text-neon-gold">
                         {index + 1}
                       </span>
+                      <div className="flex shrink-0 flex-col gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => moveSong(index, -1)}
+                          disabled={index === 0}
+                          aria-label={`Subir ${song.title || 'a música'}`}
+                          className="grid h-4 w-7 place-items-center rounded text-zinc-600 transition hover:bg-white/5 hover:text-neon-cyan disabled:pointer-events-none disabled:opacity-25"
+                        >
+                          <ChevronUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveSong(index, 1)}
+                          disabled={index === selectedSongs.length - 1}
+                          aria-label={`Descer ${song.title || 'a música'}`}
+                          className="grid h-4 w-7 place-items-center rounded text-zinc-600 transition hover:bg-white/5 hover:text-neon-cyan disabled:pointer-events-none disabled:opacity-25"
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                      </div>
                       <Input
                         value={song.title}
                         onChange={(e) => updateSong(index, { title: e.target.value })}

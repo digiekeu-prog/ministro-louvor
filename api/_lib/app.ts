@@ -3,13 +3,19 @@
  * local de desenvolvimento).
  *
  * Protocolo:
- *  - POST /api/login  { email }  -> { token, user, role }
+ *  - POST /api/login  { phone }  -> { token, user, role }
  *  - GET  /api/sync?since=N        -> { seq, changes } ou { seq, state }
  *  - POST /api/sync  { ops: [...] } -> { seq, changes }
  */
 
 import type { AppData, SyncChange, SyncOp } from '../../src/lib/syncState.ts'
-import { findMemberByEmail, itemId, stateFromChanges } from '../../src/lib/syncState.ts'
+import {
+  findMemberByLegacyEmail,
+  findMemberByPhone,
+  itemId,
+  stateFromChanges,
+} from '../../src/lib/syncState.ts'
+import { phoneKey } from '../../src/lib/phone.ts'
 import { getSecret, signToken, verifyToken } from './auth.ts'
 import type { Store } from './store.ts'
 
@@ -40,7 +46,7 @@ function lastSeq(changes: SyncChange[]): number {
 async function authenticate(
   store: Store,
   token: string | null,
-): Promise<{ ok: true; email: string; role: Role } | { ok: false; result: ApiResult }> {
+): Promise<{ ok: true; id: string; actor: string; role: Role } | { ok: false; result: ApiResult }> {
   const secret = await getSecret(store)
   const payload = verifyToken(secret, token)
   if (!payload) {
@@ -50,8 +56,12 @@ async function authenticate(
     }
   }
 
-  const members = stateFromChanges(await store.allChanges('members'))
-  const member = findMemberByEmail(members, payload.email)
+  const estado = stateFromChanges(await store.allChanges('members'))
+  // token novo: busca pelo id. Token antigo (login por e-mail): pelo e-mail.
+  const member =
+    (payload.id ? estado.members.find((m) => m.id === payload.id) : undefined) ??
+    (payload.email ? findMemberByLegacyEmail(estado, payload.email) : undefined)
+
   if (!member || !member.active) {
     return {
       ok: false,
@@ -64,7 +74,8 @@ async function authenticate(
 
   return {
     ok: true,
-    email: member.email,
+    id: member.id,
+    actor: member.phone ?? member.id,
     role: member.category === 'admin' ? 'admin' : 'member',
   }
 }
@@ -72,24 +83,32 @@ async function authenticate(
 /** POST /api/login — entra no app e devolve o token da sessão. */
 export async function handleLogin(
   store: Store,
-  body: { email?: string; password?: string } | null,
+  body: { phone?: string; password?: string; email?: string } | null,
 ): Promise<ApiResult> {
   await store.ensure()
 
-  const email = (body?.email ?? '').trim().toLowerCase()
-  if (!email) return { status: 400, body: { error: 'Informe o e-mail.' } }
+  const telefone = phoneKey(body?.phone ?? '')
+  // transição: versões antigas do app ainda mandavam o e-mail
+  const emailAntigo = (body?.email ?? '').trim().toLowerCase()
+
+  if (!telefone && !emailAntigo) {
+    return { status: 400, body: { error: 'Informe o celular.' } }
+  }
 
   const members = stateFromChanges(await store.allChanges('members'))
-  const member = findMemberByEmail(members, email)
+  const member = telefone
+    ? findMemberByPhone(members, telefone)
+    : findMemberByLegacyEmail(members, emailAntigo)
+
   if (!member) {
-    return { status: 404, body: { error: 'Não encontramos uma conta com esse e-mail.' } }
+    return { status: 404, body: { error: 'Não encontramos uma conta com esse celular.' } }
   }
   if (!member.active) {
     return { status: 403, body: { error: 'Esta conta está inativa. Fale com o ministro.' } }
   }
 
   const secret = await getSecret(store)
-  const token = signToken(secret, member.email)
+  const token = signToken(secret, { id: member.id, phone: member.phone })
 
   return {
     status: 200,
@@ -99,7 +118,7 @@ export async function handleLogin(
       user: {
         id: member.id,
         name: member.name,
-        email: member.email,
+        phone: member.phone ?? '',
         category: member.category,
       },
     },
@@ -258,7 +277,7 @@ export async function handlePush(
     ops.splice(0, ops.length, ...filtradas)
   }
 
-  const inserted = await store.append(ops, auth.email)
+  const inserted = await store.append(ops, auth.actor)
   return {
     status: 200,
     body: { seq: lastSeq(inserted), changes: inserted },

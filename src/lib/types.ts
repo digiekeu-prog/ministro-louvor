@@ -5,8 +5,10 @@ export type MemberCategory = Category | 'admin'
 export interface Member {
   id: string
   name: string
-  /** E-mail (opcional): só quem vai entrar no app precisa de um. */
-  email: string
+  /**
+   * Celular: é com ele que a pessoa entra no app (a senha é livre).
+   * Quem fica sem celular cadastrado apenas visualiza a escala pelo link público.
+   */
   phone?: string
   /** WhatsApp do ministro: é para ele que chega a mensagem da escala. */
   whatsapp?: string
@@ -77,7 +79,10 @@ export interface Presence {
 
 export interface SessionUser {
   id: string
-  email: string
+  /** Celular usado para entrar (com o código do país, como o servidor devolve). */
+  phone: string
+  name?: string
+  category?: Member['category']
 }
 
 export const INSTRUMENT_FUNCTIONS = [
@@ -109,6 +114,7 @@ export const TECHNICAL_FUNCTIONS = [
   'Mesa de som',
   'Projeção',
   'Projeção de letras',
+  'Filmagem',
   'Tecnologia',
 ] as const
 

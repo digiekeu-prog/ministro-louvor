@@ -13,6 +13,7 @@
 
 import type { Service } from './types'
 import { formatDateLong, formatTime, parseISODate } from './utils'
+import { phoneWithCountryCode } from './phone'
 
 /**
  * Endereço do app — é por ele que o time entra e vê a escala.
@@ -33,11 +34,7 @@ const PALAVRAS_COMUNS =
 
 /** Deixa só os dígitos (com o código do país, que o wa.me exige). */
 export function normalizePhone(phone: string | undefined): string {
-  const digits = (phone ?? '').replace(/\D/g, '')
-  if (!digits) return ''
-  if (digits.length >= 12) return digits
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`
-  return digits
+  return phoneWithCountryCode(phone)
 }
 
 /** Link do WhatsApp com a mensagem já escrita. */

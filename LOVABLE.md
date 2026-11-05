@@ -50,7 +50,7 @@ Vercel.
 - `src/App.tsx` — rotas. `RequireAdmin` só libera quem tem `isAdmin` (categoria `admin`).
 - `src/store/DataContext.tsx` — CRUD de serviços/membros/presenças. Cada alteração vira uma
   **operação** (`upsert`/`delete`/`reset`) e vai para a fila de sincronização.
-- `src/store/AuthContext.tsx` — sessão: o **e-mail precisa existir na lista do servidor**; a
+- `src/store/AuthContext.tsx` — sessão: o **celular precisa existir na lista do servidor**; a
   senha é livre (simulação de UI). Sem internet, cai para a lista local.
 - `src/lib/sync.ts` — motor de sincronização: fila, polling (4s), token e status na tela.
 - `src/lib/syncState.ts` — tipos e a lógica de merge das operações (usada pelo app e pelo servidor).
@@ -58,7 +58,7 @@ Vercel.
 - `api/_lib/app.ts` — as regras do servidor (login/pull/push, permissões e a escala pública).
 - `api/_lib/postgres.ts` — acesso ao Postgres (Neon) e criação das tabelas.
 - `api/_lib/auth.ts` — token de sessão assinado (HMAC), com o segredo guardado no banco.
-- `api/escala.ts` + `handlePublicScale` — endpoint público da escala (não expõe e-mail, telefone
+- `api/escala.ts` + `handlePublicScale` — endpoint público da escala (não expõe celular, telefone
   nem presença).
 - `src/components/SyncStatus.tsx` — selo de estado da sincronização + aviso de primeira configuração.
 - `src/lib/mediaLinks.ts` — `describeMedia()` converte qualquer URL em fonte + URL de embed.
@@ -91,7 +91,7 @@ Vercel.
   (`api/_lib/app.ts`); presença pode ser por qualquer integrante. A UI esconde o botão, mas quem
   protege de verdade é a API.
 - **O selo da sincronização distingue os estados**: `sem_conexao` (sem internet, a fila fica
-  guardada), `sem_acesso` (o e-mail saiu da lista da equipe → a sessão é encerrada e a tela de
+  guardada), `sem_acesso` (o celular saiu da lista da equipe → a sessão é encerrada e a tela de
   login explica o motivo) e `erro` (resposta HTTP do servidor). Nunca deixe tudo virar
   "Offline" silencioso.
 - **O `vercel.json` não pode reescrever `/api`** — a regra é `"/((?!api/).*)"`. Se o rewrite
@@ -119,10 +119,22 @@ Vercel.
 - **A mensagem do WhatsApp é curta de propósito** (pedido do usuário): só o culto, o local, o
   recado (observações) e o link público. **Nunca** mandar a lista da equipe nem o repertório no
   texto — a escala, o vídeo, a letra e a cifra ficam dentro do link, senão ninguém entra no app.
-- **Só os ministros fazem login.** Integrantes podem ficar sem e-mail (`Member.email` é
-  opcional) e visualizam pela página pública `/escala/:id`. Não exija e-mail para ver a escala.
+- **Só os ministros fazem login.** Integrantes podem ficar sem celular (`Member.phone` é
+  opcional) e visualizam pela página pública `/escala/:id`. Não exija celular para ver a escala.
+- **O login é pelo celular** (`src/lib/phone.ts`: `samePhone`, `maskPhone`, `formatPhone`): a
+  comparação ignora máscara e código do país. Não existe mais e-mail no cadastro — o token da
+  sessão leva o **id** do integrante (`api/_lib/auth.ts`), não o telefone, para continuar valendo
+  se o número mudar.
+- **A mesma pessoa pode estar em mais de uma função** (toca e canta ao mesmo tempo): isso é
+  permitido e **não bloqueia** o salvamento da escala — vira só um aviso informativo
+  ("Também está em: …").
+- **A equipe técnica tem categoria própria** (`tecnica`): mesa de som, projeção, projeção de
+  letras, filmagem e tecnologia. Entram na escala como qualquer outra vaga e **só visualizam**
+  pelo link.
+- **A ordem do repertório é do culto** — o editor tem botões para subir/descer cada música
+  (`moveSong` em `src/pages/CultoEditor.tsx`); a ordem salva é a que aparece no link público.
 - **O endpoint público `/api/escala` não vaza dado pessoal**: devolve só equipe (nome, função),
-  repertório e observações — nunca e-mail, telefone ou presença.
+  repertório e observações — nunca celular, telefone ou presença.
 - **A mesma pessoa pode estar em mais de uma função** (toca e canta ao mesmo tempo): isso é
   permitido e **não bloqueia** o salvamento da escala — vira só um aviso informativo
   ("Também está em: …").
