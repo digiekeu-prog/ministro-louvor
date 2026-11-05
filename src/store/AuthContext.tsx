@@ -147,9 +147,16 @@ export function AuthProvider({
         // o servidor respondeu, mas deu erro (5xx, banco fora, cota do Neon):
         // não é recusa de acesso — o app espera e tenta de novo, sem encerrar
         // a sessão do ministro.
-        markServerError(
-          'O servidor está com problema agora. Assim que ele voltar, o app volta a sincronizar sozinho.',
-        )
+        if (result.code === 'cota_neon') {
+          markQuota(
+            result.error ??
+              'O banco de dados está sem cota no momento (plano do Neon). Nada foi perdido — o app continua funcionando só neste aparelho até a cota voltar.',
+          )
+        } else {
+          markServerError(
+            'O servidor está com problema agora. Assim que ele voltar, o app volta a sincronizar sozinho.',
+          )
+        }
         tentativas += 1
         return
       }
