@@ -126,6 +126,13 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
   (`moveSong` em `src/pages/CultoEditor.tsx`); a ordem salva é a que aparece no link público.
 - Ao mexer no `api/`, use imports **com a extensão `.ts`** (o Node executa os scripts assim) e
   mantenha o `api/` livre de dependências do navegador.
+- **Se toda a API responder 500 ao mesmo tempo, o problema quase nunca é o código: é a cota do
+  Neon** (plano free). O banco responde `402: Your account or project has exceeded the quota` e o
+  app fica "só neste aparelho" até a cota ser renovada (reset mensal) ou o plano ser atualizado
+  (Vercel → Storage → integração Neon → upgrade, ou console.neon.tech). Os dados continuam no
+  banco — nada é apagado. Como o app consulta o servidor a cada 4s, o compute do Neon fica sempre
+  ligado e queima a cota mensal rápido: para poupar, increase o intervalo do polling ou use um
+  plano pago.
 
 ## Antes de commitar
 
