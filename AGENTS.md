@@ -32,8 +32,9 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
 - `api/_lib/auth.ts` — token de sessão assinado (HMAC), com o segredo guardado no banco.
 - `src/components/SyncStatus.tsx` — selo de estado da sincronização + aviso de primeira configuração.
 - `src/lib/mediaLinks.ts` — `describeMedia()` converte qualquer URL em fonte + URL de embed.
-- `src/lib/types.ts` — tipos e as listas `INSTRUMENT_FUNCTIONS` / `VOCAL_FUNCTIONS` que alimentam
-  selects e filtros de skills.
+- `src/lib/types.ts` — tipos e as listas `INSTRUMENT_FUNCTIONS` / `VOCAL_FUNCTIONS` /
+  `TECHNICAL_FUNCTIONS` (equipe técnica: mesa de som, projeção…) que alimentam selects e filtros
+  de skills.
 - `src/components/ui.tsx` — `Button`, `Card`, `Field`, `Modal`, `Segmented`, etc.
 - `src/components/SongViewer.tsx` — player interno (vídeo em cima, letra/cifra embaixo).
 - `src/lib/whatsapp.ts` — monta a mensagem **curta** da escala (culto, local, recado e link) e o
@@ -95,6 +96,10 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
   opcional) e visualizam pela página pública `/escala/:id`. Não exija e-mail para ver a escala.
 - **O endpoint público `/api/escala` não vaza dado pessoal**: devolve só equipe (nome, função),
   repertório e observações — nunca e-mail, telefone ou presença.
+- **A mesma pessoa pode estar em mais de uma função** (toca e canta ao mesmo tempo): isso é
+  permitido e **não bloqueia** o salvamento — vira só um aviso informativo ("Também está em: …").
+- **A equipe técnica tem categoria própria** (`tecnica`): mesa de som, projeção, projeção de
+  letras e tecnologia. Entram na escala como qualquer outra vaga e **só visualizam** pelo link.
 - Ao mexer no `api/`, use imports **com a extensão `.ts`** (o Node executa os scripts assim) e
   mantenha o `api/` livre de dependências do navegador.
 
