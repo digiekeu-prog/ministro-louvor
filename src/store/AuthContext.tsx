@@ -48,16 +48,11 @@ export function AuthProvider({
   children: ReactNode
   members: Member[]
 }) {
-  const [session, setSession] = useState<SessionUser | null>(() => {
-    const saved = readStore<StoredSession | null>(STORAGE_KEYS.session, null)
-    if (!saved) return null
-    return {
-      id: saved.id,
-      phone: saved.phone ?? '',
-      name: saved.name,
-      category: saved.category,
-    }
-  })
+  // A sessão salva pode ainda ser do login antigo (por e-mail): guardamos o
+  // formato cru para conseguir trocar pelo celular sem desconectar ninguém.
+  const [session, setSession] = useState<StoredSession | null>(() =>
+    readStore<StoredSession | null>(STORAGE_KEYS.session, null),
+  )
   const [authError, setAuthError] = useState<string | null>(null)
   const status = useSyncStatus()
 
@@ -76,8 +71,19 @@ export function AuthProvider({
   // antigo pelo celular do cadastro, para ninguém ser desconectado na hora.
   const sessao = useMemo<SessionUser | null>(() => {
     if (!session) return null
-    if (session.phone) return session
-    const antigo = (session as StoredSession).email ?? ''
+    if (session.phone) {
+      return {
+        id: session.id,
+        phone: session.phone,
+        name: session.name,
+        category: session.category,
+      }
+    }
+    const antigo = session.email ?? ''
+    // a lista de membros ainda não carregou: espera (não desconecta ninguém)
+    if (!members.length) {
+      return { id: session.id, phone: '', name: session.name, category: session.category }
+    }
     const member = membroComEmailAntigo(members, antigo)
     if (!member?.phone) return null
     return {
@@ -94,9 +100,9 @@ export function AuthProvider({
 
   // guarda a sessão (já no formato novo: celular)
   useEffect(() => {
-    if (sessao) writeStore(STORAGE_KEYS.session, sessao)
-    else removeStore(STORAGE_KEYS.session)
-  }, [sessao])
+    if (sessao?.phone) writeStore(STORAGE_KEYS.session, sessao)
+    else if (!session) removeStore(STORAGE_KEYS.session)
+  }, [sessao, session])
 
   // já existe sessão salva? então volta a sincronizar com a nuvem
   useEffect(() => {

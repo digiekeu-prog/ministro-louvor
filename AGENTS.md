@@ -36,7 +36,8 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
   `TECHNICAL_FUNCTIONS` (equipe técnica: mesa de som, projeção…) que alimentam selects e filtros
   de skills.
 - `src/components/ui.tsx` — `Button`, `Card`, `Field`, `Modal`, `Segmented`, etc.
-- `src/components/SongViewer.tsx` — player interno (vídeo em cima, letra/cifra embaixo).
+- `src/components/SongViewer.tsx` — player interno (vídeo em cima, letra/cifra embaixo). Sem rodapé
+  e sem botão de copiar: a letra usa todo o espaço que sobra (pedido do usuário).
 - `src/lib/whatsapp.ts` — monta a mensagem **curta** da escala (culto, local, recado e link) e o
   link `wa.me`.
 - `src/components/WhatsappShare.tsx` — modal do aviso (preview, copiar, abrir no WhatsApp).

@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
-  Check,
-  Copy,
   FileText,
   Guitar,
   Info,
@@ -13,13 +11,12 @@ import {
   Play,
   Plus,
   RotateCcw,
-  Video,
   X,
 } from 'lucide-react'
 import type { ServiceSong } from '../lib/types'
 import { SOURCE_STYLE, describeMedia } from '../lib/mediaLinks'
 import { stripChordLines } from '../lib/chordSheet'
-import { Badge, Button, IconButton } from './ui'
+import { Badge, IconButton } from './ui'
 import { Portal } from './Portal'
 import { cn } from '../lib/utils'
 import { useDraggable } from '../hooks/useDraggable'
@@ -50,7 +47,6 @@ interface SongViewerProps {
  */
 export function SongViewer({ song, open, onClose }: SongViewerProps) {
   const [tab, setTab] = useState<TextTab>('letra')
-  const [copied, setCopied] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [lastSongId, setLastSongId] = useState(song?.id)
@@ -61,7 +57,6 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
   if (song && lastSongId !== song.id) {
     setLastSongId(song.id)
     setTab(song.lyrics?.trim() ? 'letra' : 'cifra')
-    setCopied(false)
     setPlaying(false)
   }
 
@@ -151,18 +146,6 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
   /** Posição da velocidade atual na lista (para os botões − e +). */
   const speedIndex = Math.max(0, SPEEDS.indexOf(speed))
 
-  async function copyText() {
-    const content = [song?.lyrics, song?.chords].filter(Boolean).join('\n\n———\n\n')
-    if (!content) return
-    try {
-      await navigator.clipboard.writeText(content)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      /* clipboard bloqueado pelo navegador */
-    }
-  }
-
   return (
     <Portal>
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-5">
@@ -240,7 +223,7 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
             </div>
 
             {/* Vídeo no topo */}
-            <div className="shrink-0 border-b border-white/8 px-4 py-3 sm:px-5">
+            <div className="shrink-0 border-b border-white/8 px-3 py-2.5 sm:px-4">
               {embedSrc ? (
                 <div className="space-y-2.5">
                   {openedByIp && (
@@ -253,7 +236,10 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
                       </p>
                     </div>
                   )}
-                  <div className="relative mx-auto aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black" style={{ maxWidth: 'min(100%, 46vh)' }}>
+                  <div
+                    className="relative mx-auto aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black"
+                    style={{ maxWidth: 'min(100%, 36vh)' }}
+                  >
                     <iframe
                       src={embedSrc}
                       title={song.title}
@@ -384,11 +370,11 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
                 </div>
               )}
 
-              <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+              <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4">
                 {tab === 'letra' ? (
                   onlyLyrics.trim() ? (
-                    <div className="rounded-2xl border border-white/8 bg-ink-900/60 p-5 sm:p-6">
-                      <p className="whitespace-pre-wrap font-display text-[1.05rem] leading-[1.9] text-zinc-200">
+                    <div className="rounded-2xl border border-white/8 bg-ink-900/60 p-4 sm:p-5">
+                      <p className="whitespace-pre-wrap font-display text-[1.1rem] leading-[1.85] text-zinc-200 sm:text-[1.15rem]">
                         {onlyLyrics}
                       </p>
                     </div>
@@ -404,7 +390,7 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
                     </div>
                   )
                 ) : hasSheet ? (
-                  <div className="rounded-2xl border border-white/8 bg-ink-900/60 p-5 sm:p-6">
+                  <div className="rounded-2xl border border-white/8 bg-ink-900/60 p-4 sm:p-5">
                     <pre className="overflow-x-auto whitespace-pre font-mono text-[0.82rem] leading-[1.7] text-zinc-200 sm:text-sm">
                       {sheet}
                     </pre>
@@ -423,19 +409,6 @@ export function SongViewer({ song, open, onClose }: SongViewerProps) {
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Rodapé */}
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/8 px-5 py-3 sm:px-6">
-              <span className="inline-flex items-center gap-1.5 text-xs text-zinc-600">
-                <Video size={13} /> Vídeo no topo, letra embaixo — sem sair do app
-              </span>
-              {(hasLyrics || hasChords) && (
-                <Button size="sm" variant="secondary" onClick={copyText}>
-                  {copied ? <Check size={14} /> : <Copy size={14} />}
-                  {copied ? 'Copiado' : 'Copiar letra/cifra'}
-                </Button>
-              )}
             </div>
           </div>
         </div>

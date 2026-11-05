@@ -65,7 +65,8 @@ Vercel.
 - `src/lib/types.ts` — tipos e as listas `INSTRUMENT_FUNCTIONS` / `VOCAL_FUNCTIONS` /
   `TECHNICAL_FUNCTIONS` que alimentam selects e filtros de skills.
 - `src/components/ui.tsx` — `Button`, `Card`, `Field`, `Modal`, `Segmented`, etc.
-- `src/components/SongViewer.tsx` — player interno (vídeo em cima, letra/cifra embaixo).
+- `src/components/SongViewer.tsx` — player interno (vídeo em cima, letra/cifra embaixo). Sem rodapé
+  e sem botão de copiar: a letra usa todo o espaço que sobra (pedido do usuário).
 - `src/lib/whatsapp.ts` — monta a mensagem **curta** da escala (culto, local, recado e link) e o
   link `wa.me`.
 - `src/components/WhatsappShare.tsx` — modal do aviso (preview, copiar, abrir no WhatsApp).
