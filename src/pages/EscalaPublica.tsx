@@ -97,6 +97,132 @@ function gravarCache(id: string, escala: EscalaPublica) {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * Resposta de presença guardada (quando o servidor está fora do ar)
+ * ------------------------------------------------------------------ */
+
+/** Uma resposta de presença que ainda não chegou no servidor. */
+interface RespostaPendente {
+  memberId: string
+  nome: string
+  confirmed: boolean
+}
+
+const CHAVE_PENDENTE = (id: string) => `worshipflow:resposta-pendente:${id}`
+
+/** Lê as respostas que ficaram guardadas neste aparelho. */
+function lerRespostasPendentes(id: string): RespostaPendente[] {
+  if (typeof window === 'undefined' || !id) return []
+  try {
+    const raw = window.localStorage.getItem(CHAVE_PENDENTE(id))
+    const data = raw ? JSON.parse(raw) : []
+    return Array.isArray(data) ? (data as RespostaPendente[]) : []
+  } catch {
+    return []
+  }
+}
+
+/** Grava a lista inteira de respostas pendentes. */
+function gravarRespostasPendentes(id: string, lista: RespostaPendente[]) {
+  try {
+    window.localStorage.setItem(CHAVE_PENDENTE(id), JSON.stringify(lista))
+  } catch {
+    /* cota cheia no navegador: segue sem guardar */
+  }
+}
+
+/**
+ * Guarda uma resposta de presença para enviar quando o servidor voltar.
+ * Devolve `true` se conseguiu guardar no aparelho.
+ */
+function guardarRespostaPendente(id: string, resposta: RespostaPendente): boolean {
+  if (typeof window === 'undefined' || !id) return false
+  try {
+    // uma resposta por pessoa: a mais recente vale
+    const lista = lerRespostasPendentes(id).filter((r) => r.memberId !== resposta.memberId)
+    lista.push(resposta)
+    gravarRespostasPendentes(id, lista)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Apaga as respostas pendentes (todas chegaram no servidor). */
+function limparRespostasPendentes(id: string) {
+  try {
+    window.localStorage.removeItem(CHAVE_PENDENTE(id))
+  } catch {
+    /* segue sem mexer */
+  }
+}
+
+/**
+ * Envia a resposta de presença para o servidor.
+ *
+ * Lança um erro com `status` quando o servidor recusou (4xx) — nesse caso não
+ * adianta tentar de novo, a resposta não é guardada na fila.
+ */
+async function postResposta(
+  escalaId: string,
+  memberId: string,
+  nome: string,
+  confirmado: boolean,
+): Promise<void> {
+  const response = await fetch(apiUrl(`/api/escala?id=${encodeURIComponent(escalaId)}`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ memberId, nome, confirmado }),
+  })
+  const data = (await response.json().catch(() => ({}))) as { error?: string }
+  if (!response.ok) {
+    const erro = new Error(data.error ?? 'Não foi possível enviar a resposta.') as Error & {
+      status?: number
+    }
+    erro.status = response.status
+    throw erro
+  }
+}
+
+/**
+ * Tenta enviar as respostas que ficaram guardadas (o servidor voltou).
+ *
+ * Resposta recusada de vez (4xx: nome que não bate, pessoa fora da escala) sai
+ * da fila — não adianta repetir. Erro de servidor ou de internet fica na fila
+ * para a próxima tentativa.
+ */
+async function enviarPendentesDoServidor(
+  escalaId: string,
+): Promise<Array<{ memberId: string; confirmed: boolean }>> {
+  const pendentes = lerRespostasPendentes(escalaId)
+  if (!pendentes.length) return []
+
+  const aceitas: Array<{ memberId: string; confirmed: boolean }> = []
+  const restantes: RespostaPendente[] = []
+
+  for (const item of pendentes) {
+    try {
+      await postResposta(escalaId, item.memberId, item.nome, item.confirmed)
+      aceitas.push({ memberId: item.memberId, confirmed: item.confirmed })
+    } catch (error) {
+      const status = (error as { status?: number }).status
+      const recusada =
+        status !== undefined &&
+        status >= 400 &&
+        status < 500 &&
+        status !== 408 &&
+        status !== 429
+      if (recusada) continue
+      restantes.push(item)
+    }
+  }
+
+  if (restantes.length) gravarRespostasPendentes(escalaId, restantes)
+  else limparRespostasPendentes(escalaId)
+
+  return aceitas
+}
+
 /**
  * Página pública da escala: é o link que o ministro manda no WhatsApp.
  *
@@ -133,6 +259,12 @@ export function EscalaPublicaPage() {
   })
   const [enviandoResposta, setEnviandoResposta] = useState(false)
   const [erroResposta, setErroResposta] = useState<string | null>(null)
+  /** A resposta ficou guardada no aparelho (servidor fora do ar). */
+  const [respostaGuardada, setRespostaGuardada] = useState(false)
+  /** Respostas que ainda não chegaram no servidor (fila do aparelho). */
+  const [pendentes, setPendentes] = useState<RespostaPendente[]>(() =>
+    lerRespostasPendentes(id ?? ''),
+  )
   const [activeSong, setActiveSong] = useState<ServiceSong | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const vivo = useRef(true)
@@ -154,6 +286,36 @@ export function EscalaPublicaPage() {
   useEffect(() => {
     escalaRef.current = escala
   }, [escala])
+
+  /**
+   * Tenta enviar as respostas de presença que ficaram guardadas neste
+   * aparelho (o servidor estava fora do ar quando a pessoa respondeu).
+   *
+   * Roda sozinho: a cada carregamento que dá certo e quando o celular volta
+   * para a tela.
+   */
+  const enviarPendentes = useCallback(async () => {
+    if (!id) return
+    const aceitas = await enviarPendentesDoServidor(id)
+    if (!vivo.current) return
+    setPendentes(lerRespostasPendentes(id))
+    if (!aceitas.length) return
+    const ultima = aceitas[aceitas.length - 1]
+    const nova = {
+      escalaId: id,
+      memberId: ultima.memberId,
+      confirmed: ultima.confirmed,
+    }
+    setResposta(nova)
+    try {
+      window.localStorage.setItem(`worshipflow:resposta:${id}`, JSON.stringify(nova))
+    } catch {
+      /* segue sem salvar no aparelho */
+    }
+    setErroResposta(null)
+    setRespostaGuardada(false)
+    setPendentes(lerRespostasPendentes(id))
+  }, [id])
 
   /** Busca a escala no servidor (silencioso = sem mostrar a tela de loading). */
   const carregar = useCallback(
@@ -180,6 +342,8 @@ export function EscalaPublicaPage() {
         setAtualizadoEm(
           new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         )
+        // o servidor voltou: manda as respostas que ficaram guardadas aqui
+        await enviarPendentes()
       } catch (error) {
         if (!vivo.current) return
         // servidor fora do ar: continua mostrando a versão salva no aparelho
@@ -205,7 +369,7 @@ export function EscalaPublicaPage() {
         }
       }
     },
-    [id],
+    [id, enviarPendentes],
   )
 
   // primeira carga
@@ -287,38 +451,61 @@ export function EscalaPublicaPage() {
   /** Prazo da resposta: a sexta-feira antes do culto. */
   const prazo = escala ? formatarPrazo(escala.date) : null
 
-  /** Envia a resposta de presença ("vou participar" / "não vou"). */
+  /**
+   * Envia a resposta de presença ("vou participar" / "não vou").
+   *
+   * Se o servidor estiver fora do ar (cota do banco, internet), a resposta
+   * fica **guardada neste aparelho** e é enviada sozinha assim que o servidor
+   * voltar — o músico não perde o voto.
+   */
   async function enviarResposta(confirmed: boolean) {
     const pessoa = achou?.[0]
     if (!pessoa || !escala) return
     setEnviandoResposta(true)
     setErroResposta(null)
+    setRespostaGuardada(false)
     try {
-      const response = await fetch(
-        apiUrl(`/api/escala?id=${encodeURIComponent(escala.id)}`),
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            memberId: pessoa.memberId,
-            nome: pessoa.nome,
-            confirmado: confirmed,
-          }),
-        },
-      )
-      const data = (await response.json().catch(() => ({}))) as { error?: string }
-      if (!response.ok) throw new Error(data.error ?? 'Não foi possível enviar a resposta.')
+      await postResposta(escala.id, pessoa.memberId, pessoa.nome, confirmed)
       const nova = { escalaId: escala.id, memberId: pessoa.memberId, confirmed }
       setResposta(nova)
+      setErroResposta(null)
       try {
         window.localStorage.setItem(`worshipflow:resposta:${escala.id}`, JSON.stringify(nova))
       } catch {
         /* segue sem salvar no aparelho */
       }
     } catch (error) {
-      setErroResposta(
-        error instanceof Error ? error.message : 'Não foi possível enviar a resposta.',
-      )
+      const mensagem =
+        error instanceof Error ? error.message : 'Não foi possível enviar a resposta.'
+      const status = (error as { status?: number }).status
+      // o servidor recusou (4xx): guardar não adianta (nome não bate, não está
+      // na escala) — o problema é a resposta, não o servidor
+      if (status !== undefined && status >= 400 && status < 500) {
+        setErroResposta(mensagem)
+        return
+      }
+      // servidor fora do ar: guarda a resposta para enviar quando voltar
+      const guardada = guardarRespostaPendente(escala.id, {
+        memberId: pessoa.memberId,
+        nome: pessoa.nome,
+        confirmed,
+      })
+      if (guardada) {
+        const nova = { escalaId: escala.id, memberId: pessoa.memberId, confirmed }
+        setResposta(nova)
+        setRespostaGuardada(true)
+        setPendentes(lerRespostasPendentes(escala.id))
+        try {
+          window.localStorage.setItem(`worshipflow:resposta:${escala.id}`, JSON.stringify(nova))
+        } catch {
+          /* segue sem salvar no aparelho */
+        }
+        setErroResposta(
+          'O servidor está fora do ar. Sua resposta ficou guardada neste aparelho e será enviada sozinha assim que ele voltar.',
+        )
+      } else {
+        setErroResposta(mensagem)
+      }
     } finally {
       setEnviandoResposta(false)
     }
@@ -401,6 +588,20 @@ export function EscalaPublicaPage() {
               <p className="mt-0.5 text-xs opacity-90">
                 O servidor está fora do ar agora. Assim que ele voltar, esta página se atualiza
                 sozinha — o repertório e a equipe continuam aqui enquanto isso.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Resposta guardada: o servidor está fora e ela sai sozinha depois */}
+        {pendentes.length > 0 && (
+          <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-amber-400/25 bg-amber-400/8 px-4 py-3 text-sm text-amber-100">
+            <Clock size={17} className="mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-semibold">Sua resposta está guardada neste aparelho.</p>
+              <p className="mt-0.5 text-xs opacity-90">
+                O servidor está fora do ar agora. Assim que ele voltar, a página envia a resposta
+                sozinha — você não precisa fazer nada de novo.
               </p>
             </div>
           </div>
@@ -553,7 +754,14 @@ export function EscalaPublicaPage() {
                   <p className="mt-2 text-[0.7rem] text-zinc-400">Enviando sua resposta…</p>
                 )}
                 {erroResposta && (
-                  <p className="mt-2 text-[0.7rem] text-red-300">{erroResposta}</p>
+                  <p
+                    className={cn(
+                      'mt-2 text-[0.7rem]',
+                      respostaGuardada ? 'text-amber-300' : 'text-red-300',
+                    )}
+                  >
+                    {erroResposta}
+                  </p>
                 )}
               </div>
             </div>

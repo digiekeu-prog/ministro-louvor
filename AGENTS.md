@@ -143,6 +143,10 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
   fora, o músico continua vendo a equipe e o repertório, com o aviso "Mostrando a versão salva
   neste aparelho". "Escala não encontrada" só aparece em 404 de verdade — nunca por erro do
   servidor.
+- **A resposta de presença não se perde com o banco fora**: se o POST em `/api/escala` falhar por
+  rede/5xx, a resposta fica guardada em `worshipflow:resposta-pendente:<id>` e a página a envia
+  sozinha no próximo carregamento que der certo (recusa 4xx — nome que não bate — não entra na
+  fila: repetir não adianta).
 - **Entrada automática do dono**: em `src/pages/Login.tsx`, `CELULAR_DONO`/`SENHA_DONO` — ao digitar
   o celular do dono, a senha entra sozinha e o app entra junto. A senha é livre no app (o que
   libera o acesso é o celular estar na lista da equipe), então ela pode ficar no front.

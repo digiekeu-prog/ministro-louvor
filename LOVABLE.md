@@ -135,6 +135,9 @@ Vercel.
 - **A página pública guarda a escala no aparelho**: com o servidor fora, o músico continua vendo a
   equipe e o repertório ("Mostrando a versão salva neste aparelho"). "Escala não encontrada" só
   aparece em 404 de verdade.
+- **A resposta de presença não se perde com o banco fora**: se o envio falhar, a resposta fica
+  guardada no aparelho (`worshipflow:resposta-pendente:<id>`) e a página manda sozinha assim que o
+  servidor voltar.
 - **Idioma da UI e dos comentários: português do Brasil.**
 - **A mensagem do WhatsApp é curta de propósito** (pedido do usuário): só o culto, o local, o
   recado (observações) e o link público. **Nunca** mandar a lista da equipe nem o repertório no
