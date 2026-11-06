@@ -25,6 +25,8 @@ import type { Category, ServiceSong } from '../lib/types'
 import { CATEGORY_LABEL, STATUS_LABEL } from '../lib/types'
 import { SOURCE_STYLE, describeMedia } from '../lib/mediaLinks'
 import { apiUrl } from '../lib/api'
+import { escalaDoCache } from '../lib/escalaLocal'
+import type { EscalaPublica } from '../lib/escalaLocal'
 import {
   intervaloAgora,
   marcarAtividade,
@@ -32,39 +34,6 @@ import {
   vigiarAtividade,
 } from '../lib/poll'
 import { cn, formatDateLong, formatarPrazo, formatTime } from '../lib/utils'
-
-interface EquipeItem {
-  memberId: string
-  nome: string
-  funcao: string
-  categoria: Category
-  observacao: string | null
-}
-
-interface EscalaPublica {
-  id: string
-  title: string
-  date: string
-  time: string
-  location: string | null
-  status: 'rascunho' | 'confirmado' | 'realizado'
-  notes: string | null
-  equipe: EquipeItem[]
-  musicas: Array<{
-    title: string
-    artist: string | null
-    link: string | null
-    lyrics: string | null
-    chords: string | null
-    key: string | null
-    bpm: number | null
-    progression: string | null
-    /** MP3 enviado pelo ministro (id do arquivo no servidor). */
-    audioId: string | null
-    audioName: string | null
-    audioSize: number | null
-  }>
-}
 
 /** De quanto em quanto tempo a página procura a versão nova da escala (ms). */
 const INTERVALO_ATUALIZACAO = 8000
@@ -94,6 +63,30 @@ function gravarCache(id: string, escala: EscalaPublica) {
     window.localStorage.setItem(CHAVE_CACHE(id), JSON.stringify(escala))
   } catch {
     /* cota cheia no navegador: segue sem salvar */
+  }
+}
+
+/**
+ * Cópia estática da escala (snapshot), servida pelo CDN do Vercel.
+ *
+ * O banco pode ficar fora do ar (cota do Neon) — mas o arquivo estático
+ * continua no ar, porque não depende do Postgres. É o plano B da página
+ * pública: o músico vê a equipe e o repertório mesmo sem o banco.
+ *
+ * O arquivo é gerado por `npm run snapshot -- <id>`.
+ */
+const CHAVE_SNAPSHOT = (id: string) => `/escala-snapshot/${id}.json`
+
+async function lerSnapshot(id: string): Promise<EscalaPublica | null> {
+  if (!id) return null
+  try {
+    const response = await fetch(CHAVE_SNAPSHOT(id), { cache: 'no-cache' })
+    if (!response.ok) return null
+    const data = (await response.json()) as { escala?: EscalaPublica } | EscalaPublica
+    const escala = (data as { escala?: EscalaPublica }).escala ?? (data as EscalaPublica)
+    return escala?.id ? escala : null
+  } catch {
+    return null
   }
 }
 
@@ -240,6 +233,8 @@ export function EscalaPublicaPage() {
   const [erro, setErro] = useState<string | null>(null)
   /** O servidor não respondeu: estamos mostrando a versão salva. */
   const [servidorFora, setServidorFora] = useState(false)
+  /** A escala veio da cópia estática (banco fora do ar). */
+  const [dadosDaCopia, setDadosDaCopia] = useState(false)
   const [atualizando, setAtualizando] = useState(false)
   const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
@@ -339,6 +334,7 @@ export function EscalaPublicaPage() {
         if (id) gravarCache(id, nova)
         setErro(null)
         setServidorFora(false)
+        setDadosDaCopia(false)
         setAtualizadoEm(
           new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         )
@@ -348,6 +344,41 @@ export function EscalaPublicaPage() {
         if (!vivo.current) return
         // servidor fora do ar: continua mostrando a versão salva no aparelho
         const status = (error as { status?: number }).status
+
+        // o banco falhou (cota, banco fora): tenta a cópia estática, que é
+        // servida pelo CDN e não depende do Postgres
+        if (status !== 404 && id) {
+          const copia = await lerSnapshot(id)
+          if (copia && vivo.current) {
+            escalaRef.current = copia
+            setEscala(copia)
+            gravarCache(id, copia)
+            setErro(null)
+            setServidorFora(true)
+            setDadosDaCopia(true)
+            setAtualizadoEm(
+              new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            )
+            return
+          }
+
+          // última saída: o cache do próprio app neste aparelho (o ministro
+          // tem a escala salva aqui — o celular dele continua vendo tudo)
+          const doApp = escalaDoCache(id)
+          if (doApp && vivo.current) {
+            escalaRef.current = doApp
+            setEscala(doApp)
+            gravarCache(id, doApp)
+            setErro(null)
+            setServidorFora(true)
+            setDadosDaCopia(false)
+            setAtualizadoEm(
+              new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            )
+            return
+          }
+        }
+
         if (escalaRef.current) {
           setServidorFora(true)
           if (!silencioso) setErro(null)
@@ -579,15 +610,21 @@ export function EscalaPublicaPage() {
       </header>
 
       <main className="mx-auto w-full max-w-3xl px-4 pt-6 sm:px-6">
-        {/* Servidor fora do ar: mostramos a versão salva neste aparelho */}
+        {/* Servidor fora do ar: mostramos a versão salva (neste aparelho ou a
+            cópia estática do banco) */}
         {servidorFora && (
           <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-amber-400/25 bg-amber-400/8 px-4 py-3 text-sm text-amber-100">
             <CloudOff size={17} className="mt-0.5 shrink-0" />
             <div className="min-w-0">
-              <p className="font-semibold">Mostrando a versão salva neste aparelho.</p>
+              <p className="font-semibold">
+                {dadosDaCopia
+                  ? 'Mostrando a cópia salva da escala.'
+                  : 'Mostrando a versão salva neste aparelho.'}
+              </p>
               <p className="mt-0.5 text-xs opacity-90">
-                O servidor está fora do ar agora. Assim que ele voltar, esta página se atualiza
-                sozinha — o repertório e a equipe continuam aqui enquanto isso.
+                {dadosDaCopia
+                  ? 'O banco de dados está fora do ar agora. Esta é a cópia da última vez que a escala foi atualizada — assim que o banco voltar, a página se atualiza sozinha.'
+                  : 'O servidor está fora do ar agora. Assim que ele voltar, esta página se atualiza sozinha — o repertório e a equipe continuam aqui enquanto isso.'}
               </p>
             </div>
           </div>

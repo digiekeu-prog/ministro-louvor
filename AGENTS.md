@@ -147,6 +147,15 @@ música no repertório). Para checar a sincronização, abra **duas origens dife
   rede/5xx, a resposta fica guardada em `worshipflow:resposta-pendente:<id>` e a página a envia
   sozinha no próximo carregamento que der certo (recusa 4xx — nome que não bate — não entra na
   fila: repetir não adianta).
+- **A página pública tem três camadas de dados** (nesta ordem): 1) API (fonte da verdade);
+  2) **cópia estática** em `public/escala-snapshot/<id>.json` — servida pelo CDN da Vercel, não
+  depende do Postgres, então continua no ar com o banco fora; 3) **cache do app** neste aparelho
+  (`src/lib/escalaLocal.ts`, remontado de `worshipflow:services`/`members`/`songs`). Só uma
+  resposta 404 (escala que não existe) cai na tela de erro. A cópia estática se gera com
+  `npm run snapshot -- <idDaEscala>` (precisa do banco no ar).
+- **`/copia/<id>`** (`src/pages/CopiaEscala.tsx`) remonta a escala do cache do aparelho e mostra
+  o JSON com botão de copiar: é o jeito de gerar a cópia estática sem o banco no ar (o ministro
+  copia no celular e envia).
 - **Entrada automática do dono**: em `src/pages/Login.tsx`, `CELULAR_DONO`/`SENHA_DONO` — ao digitar
   o celular do dono, a senha entra sozinha e o app entra junto. A senha é livre no app (o que
   libera o acesso é o celular estar na lista da equipe), então ela pode ficar no front.

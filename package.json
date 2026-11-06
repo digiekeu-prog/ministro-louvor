@@ -9,7 +9,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "db:seed": "node --experimental-strip-types --env-file=.env.local scripts/seed-db.ts"
+    "db:seed": "node --experimental-strip-types --env-file=.env.local scripts/seed-db.ts",
+    "snapshot": "node scripts/gerar-snapshot-escala.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

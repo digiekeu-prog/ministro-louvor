@@ -8,6 +8,7 @@ import { EscalasPage } from './pages/Escalas'
 import { CultoEditorPage } from './pages/CultoEditor'
 import { EscalaDetalhePage } from './pages/EscalaDetalhe'
 import { EscalaPublicaPage } from './pages/EscalaPublica'
+import { CopiaEscalaPage } from './pages/CopiaEscala'
 import { MinhaEscalaPage } from './pages/MinhaEscala'
 import { EquipePage } from './pages/Equipe'
 import { PerfilPage } from './pages/Perfil'
@@ -34,6 +35,8 @@ function Shell() {
       />
       {/* Escala pública: é o link que o ministro manda no WhatsApp (sem login) */}
       <Route path="/escala/:id" element={<EscalaPublicaPage />} />
+      {/* Cópia da escala a partir do cache do aparelho (quando o banco está fora) */}
+      <Route path="/copia/:id" element={<CopiaEscalaPage />} />
       <Route
         path="/app"
         element={
